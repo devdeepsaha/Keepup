@@ -776,15 +776,28 @@ export default function AssistantPanel({ workspace, tasks, open, onOpenChange, o
           )}
 
           <div className="flex items-start gap-2.5 pl-3 pt-2.5">
-            {/* Bouncy reads along while you type, and thinks while it works on the answer. */}
-            <LiveOrb
-              size={30}
-              variant="custom"
-              color="#257EF4"
-              eyeColor="#FAFAFA"
-              mood={pending ? 'thinking' : text.trim() ? 'reading' : null}
-              readX={Math.min(1, text.length / 48)}
-            />
+            {/* Bouncy reads along while you type, and thinks while it works on the answer, with a thought bubble. */}
+            <span className="relative inline-flex shrink-0">
+              <LiveOrb
+                size={30}
+                variant="custom"
+                color="#257EF4"
+                eyeColor="#FAFAFA"
+                mood={pending ? 'thinking' : text.trim() ? 'reading' : null}
+                readX={Math.min(1, text.length / 48)}
+              />
+              <span
+                aria-hidden="true"
+                className={`thought-bubble pointer-events-none absolute -top-6 left-5 z-10 ${pending || text.trim() ? 'is-on' : ''}`}
+              >
+                <span className="absolute -bottom-1 -left-0.5 h-1.5 w-1.5 rounded-full border border-[var(--line-color)] bg-[var(--surface)]" />
+                <span className="flex items-center gap-[3px] rounded-full border border-[var(--line-color)] bg-[var(--surface)] px-2 py-1.5 shadow-md">
+                  <span className="thought-dot" />
+                  <span className="thought-dot" />
+                  <span className="thought-dot" />
+                </span>
+              </span>
+            </span>
             {/* The textarea's own text is transparent; the backdrop behind it draws the same text with tags as pills. */}
             <div className="relative flex-1 min-w-0">
               <div
