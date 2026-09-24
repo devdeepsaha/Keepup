@@ -172,7 +172,7 @@ export function timerFor(task: Task, now: number, todayKey: string, scope?: Rhyt
 export function urgencyType(progress: number): CSSProperties {
   const u = Math.pow(Math.min(1, Math.max(0, progress)), 1.4);
   return {
-    fontSize: `calc(1.45rem + ${u.toFixed(3)} * 1.25rem)`,
+    fontSize: `calc(var(--title-base) + ${u.toFixed(3)} * var(--title-grow))`, // see index.css (smaller on phones)
     fontWeight: Math.round(300 + u * 400),
     letterSpacing: `${(-0.005 - u * 0.025).toFixed(3)}em`,
     lineHeight: 1.15,

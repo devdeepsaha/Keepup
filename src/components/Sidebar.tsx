@@ -489,8 +489,8 @@ export default function Sidebar({
     <aside
       style={{ width: collapsed ? SIDEBAR_ICON_WIDTH : width }}
       className={`fixed inset-y-0 left-0 z-20 flex flex-col border-r border-[var(--line-color)] bg-[var(--bg-color)] ${
-        resizing ? '' : 'transition-[width] duration-200 ease-linear'
-      } ${
+        resizing ? '' : 'transition-[width,translate] duration-200 ease-linear'
+      } ${collapsed ? 'max-md:-translate-x-full' : ''} ${
         collapsed ? '' : 'shadow-xl md:shadow-none'
       }`}
     >

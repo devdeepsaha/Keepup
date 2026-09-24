@@ -30,6 +30,18 @@
   color-scheme: dark;
 }
 
+/* Task titles grow with urgency: from --title-base up to base + grow. Smaller on phones. */
+:root {
+  --title-base: 1.2rem;
+  --title-grow: 0.7rem;
+}
+@media (min-width: 768px) {
+  :root {
+    --title-base: 1.45rem;
+    --title-grow: 1.25rem;
+  }
+}
+
 /* Compact density: everything sized in rem (spacing, text) shrinks a notch. */
 :root[data-density='compact'] {
   font-size: 14px;

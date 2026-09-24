@@ -149,13 +149,14 @@ export default function Workspace({ tasks, loading, focusTask, openId, onOpenIdC
           placeholder="Add a task"
           maxLength={500}
           autoFocus={isFirstRun}
-          className="flex-1 min-w-0 bg-transparent border-none py-2.5 text-xl md:text-2xl font-display font-medium tracking-tight outline-none clean-input focus:text-[var(--accent)] transition-colors"
+          className="flex-1 min-w-[12rem] bg-transparent border-none py-2.5 text-xl md:text-2xl font-display font-medium tracking-tight outline-none clean-input focus:text-[var(--accent)] transition-colors"
         />
         {!newTaskText && (
           <kbd className="hidden md:inline font-display text-xs text-[var(--text-muted)] border border-[var(--line-color)] rounded px-1.5 py-0.5">
             N
           </kbd>
         )}
+        <span className="ml-auto flex items-center gap-4 max-sm:w-full max-sm:justify-between">
         <label className="flex items-center gap-2 font-display text-xs uppercase tracking-wider text-[var(--text-muted)] pb-2 md:pb-0">
           Due
           <input
@@ -173,6 +174,7 @@ export default function Workspace({ tasks, loading, focusTask, openId, onOpenIdC
         >
           Add
         </button>
+        </span>
       </form>
 
       {!loading && !isFirstRun && (

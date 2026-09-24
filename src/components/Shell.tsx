@@ -165,7 +165,13 @@ export default function Shell({ user }: { user: User }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [toggleCollapsed, switchWorkspace]);
 
+  // On phones the sidebar is a drawer: close it once something in it was picked.
+  const closeDrawerOnPhone = () => {
+    if (window.innerWidth < 768) setCollapsedSaved(true);
+  };
+
   const navigate = (v: View, opts: { day?: string; section?: Section } = {}) => {
+    closeDrawerOnPhone();
     setView(v);
     setCalendarDay(opts.day);
     if (opts.section) {
@@ -176,6 +182,7 @@ export default function Shell({ user }: { user: User }) {
 
   // From the sidebar: open that task (closing any other); clicking the open one again closes it.
   const openTask = (id: string) => {
+    closeDrawerOnPhone();
     if (view === 'workspace' && openTaskId === id) return setOpenTaskId(null);
     setView('workspace');
     setOpenTaskId(id);
@@ -228,12 +235,12 @@ export default function Shell({ user }: { user: User }) {
 
       {/* On small screens the expanded sidebar overlays content instead of pushing it. */}
       <div
-        className={`min-h-screen pl-[var(--sb-icon)] md:pl-[var(--sb)] pb-10 ${resizing ? '' : 'transition-[padding] duration-200 ease-linear'} ${
+        className={`min-h-screen md:pl-[var(--sb)] pb-10 ${resizing ? '' : 'transition-[padding] duration-200 ease-linear'} ${
           assistantOpen ? 'lg:pr-[380px]' : ''
         }`}
       >
         {/* Page header: sidebar toggle + breadcrumb */}
-        <header className="flex h-12 items-center gap-2 px-4 pr-16">
+        <header className="flex h-12 items-center gap-2 px-3 md:px-4 pr-16">
           <button
             onClick={toggleCollapsed}
             aria-label="Toggle sidebar"

@@ -175,7 +175,7 @@ export default function TaskItem({
         <div className="border-b border-[var(--line-color)] group">
           {/* Task header: one compact line (title + status chips) */}
           <div
-            className="@container py-3 flex items-center gap-3 cursor-pointer"
+            className="@container py-3 flex items-start @2xl:items-center gap-3 cursor-pointer"
             onClick={() => !isEditing && phase === 'idle' && setOpen(!isOpen)}
           >
             <button
@@ -184,7 +184,7 @@ export default function TaskItem({
                 e.stopPropagation();
                 handleToggle();
               }}
-              className={`w-6 h-6 shrink-0 rounded-full border-2 flex items-center justify-center transition-all duration-300 cursor-pointer ${
+              className={`mt-1 @2xl:mt-0 w-6 h-6 shrink-0 rounded-full border-2 flex items-center justify-center transition-all duration-300 cursor-pointer ${
                 done ? 'border-[var(--text-muted)] bg-transparent' : 'border-[var(--text-main)] hover:bg-[var(--text-main)]'
               }`}
             >
@@ -237,7 +237,7 @@ export default function TaskItem({
               </div>
 
               {/* Status chips */}
-              <div className="flex items-center gap-3 shrink-0 font-display text-xs whitespace-nowrap">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 @2xl:shrink-0 font-display text-xs whitespace-nowrap">
                 {waiting && !done && (
                   <span
                     title={`On hold${task.waiting_for ? `: waiting for ${task.waiting_for}` : ''}`}
@@ -262,7 +262,8 @@ export default function TaskItem({
                       />
                     ))}
                     <span className="ml-1 text-[var(--text-muted)]">
-                      {cadence.count}/{cadence.target} {cadence.target < cadence.perWeek ? 'first wk' : 'this wk'}
+                      {cadence.count}/{cadence.target}
+                      <span className="max-sm:hidden"> {cadence.target < cadence.perWeek ? 'first wk' : 'this wk'}</span>
                     </span>
                   </span>
                 )}
@@ -277,10 +278,15 @@ export default function TaskItem({
                     }}
                     className="px-2.5 py-1 rounded-full border border-[var(--accent)] font-semibold uppercase tracking-wider text-[0.625rem] text-[var(--accent)] hover:bg-[image:var(--accent-gradient)] hover:border-transparent hover:text-white transition-colors cursor-pointer"
                   >
-                    {waiting ? 'Log nudge' : cadence ? 'Log client update' : 'Log update'}
+                    <span className="sm:hidden">{waiting ? 'Nudge' : 'Log update'}</span>
+                    <span className="max-sm:hidden">{waiting ? 'Log nudge' : cadence ? 'Log client update' : 'Log update'}</span>
                   </button>
                 )}
-                {!done && <TimerRing timer={timer} details={details} />}
+                {!done && (
+                  <span className="flex max-sm:order-first">
+                    <TimerRing timer={timer} details={details} />
+                  </span>
+                )}
                 {/* Quick delete: appears on hover; first click asks, second moves it to the trash. */}
                 <button
                   aria-label={confirmDelete ? 'Confirm move to trash' : 'Move to trash'}
@@ -290,7 +296,7 @@ export default function TaskItem({
                     if (confirmDelete) onDelete(task.id);
                     else setConfirmDelete(true);
                   }}
-                  className={`transition-opacity cursor-pointer ${
+                  className={`max-sm:hidden transition-opacity cursor-pointer ${
                     confirmDelete
                       ? 'opacity-100 font-semibold uppercase tracking-wider text-[0.625rem] text-red-500'
                       : 'opacity-0 group-hover:opacity-100 focus:opacity-100 text-[var(--text-muted)] hover:text-red-500'
