@@ -15,6 +15,7 @@ import { dayKey } from '../lib/dates';
 import { clientTags, taskHandles } from '../lib/handles';
 import type { Task, Workspace } from '../types';
 import { LiveOrb } from './LiveOrb';
+import { useBouncyQuip } from '../lib/quips';
 
 // "@query" right before the caret (at the start or after a space), or null. Handles have no spaces.
 function mentionAt(value: string, caret: number) {
@@ -126,6 +127,7 @@ export default function AssistantPanel({ workspace, tasks, open, onOpenChange, o
   }, [text]);
   const [images, setImages] = useState<AiImage[]>([]);
   const [pending, setPending] = useState(false);
+  const quip = useBouncyQuip(text, pending, open); // a remark in Bouncy's thought bubble, or null for "…"
   const [elapsed, setElapsed] = useState(0); // ms since the current request started
   const [menuOpen, setMenuOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -795,14 +797,23 @@ export default function AssistantPanel({ workspace, tasks, open, onOpenChange, o
               />
               <span
                 aria-hidden="true"
-                className={`thought-bubble pointer-events-none absolute -top-6 left-5 z-10 ${pending || text.trim() ? 'is-on' : ''}`}
+                className={`thought-bubble pointer-events-none absolute -top-6 left-5 z-10 ${pending || text.trim() || quip ? 'is-on' : ''}`}
               >
                 <span className="absolute -bottom-1 -left-0.5 h-1.5 w-1.5 rounded-full border border-[var(--line-color)] bg-[var(--surface)]" />
-                <span className="flex items-center gap-[3px] rounded-full border border-[var(--line-color)] bg-[var(--surface)] px-2 py-1.5 shadow-md">
-                  <span className="thought-dot" />
-                  <span className="thought-dot" />
-                  <span className="thought-dot" />
-                </span>
+                {quip ? (
+                  <span
+                    key={quip}
+                    className="quip-pop block whitespace-nowrap rounded-full border border-[var(--line-color)] bg-[var(--surface)] px-2.5 py-1 font-display text-[0.6875rem] text-[var(--text-main)] shadow-md"
+                  >
+                    {quip}
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-[3px] rounded-full border border-[var(--line-color)] bg-[var(--surface)] px-2 py-1.5 shadow-md">
+                    <span className="thought-dot" />
+                    <span className="thought-dot" />
+                    <span className="thought-dot" />
+                  </span>
+                )}
               </span>
             </span>
             {/* The textarea's own text is transparent; the backdrop behind it draws the same text with tags as pills. */}
