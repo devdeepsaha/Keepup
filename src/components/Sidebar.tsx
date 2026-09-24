@@ -36,7 +36,7 @@ interface Props {
   onResize: (pointerX: number) => void; // while dragging the edge
   onResizingChange: (resizing: boolean) => void;
   onResetWidth: () => void;
-  onNavigate: (view: View, opts?: { day?: string; section?: Section }) => void;
+  onNavigate: (view: View, opts?: { day?: string; section?: Section; keepOpen?: boolean }) => void;
   tasks: Task[];
   handles: Map<string, string>;
   onOpenTask: (id: string) => void;
@@ -560,7 +560,8 @@ export default function Sidebar({
               <div key={item.id}>
                 <button
                   onClick={() => {
-                    onNavigate(item.id);
+                    // A main tab also opens its sub-tabs, so on phones the drawer stays open for them.
+                    onNavigate(item.id, { keepOpen: true });
                     if (!collapsed) setExpandedNav((s) => ({ ...s, [item.id]: active ? !s[item.id] : true }));
                   }}
                   aria-expanded={open}

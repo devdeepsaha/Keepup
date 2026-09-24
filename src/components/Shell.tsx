@@ -170,8 +170,8 @@ export default function Shell({ user }: { user: User }) {
     if (window.innerWidth < 768) setCollapsedSaved(true);
   };
 
-  const navigate = (v: View, opts: { day?: string; section?: Section } = {}) => {
-    closeDrawerOnPhone();
+  const navigate = (v: View, opts: { day?: string; section?: Section; keepOpen?: boolean } = {}) => {
+    if (!opts.keepOpen) closeDrawerOnPhone();
     setView(v);
     setCalendarDay(opts.day);
     if (opts.section) {
