@@ -117,6 +117,13 @@ export default function AssistantPanel({ workspace, tasks, open, onOpenChange, o
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [text, setText] = useState('');
+  // Typing paused for a moment: Bouncy looks up at its thought bubble instead of reading along.
+  const [typingPaused, setTypingPaused] = useState(false);
+  useEffect(() => {
+    setTypingPaused(false);
+    const t = window.setTimeout(() => setTypingPaused(true), 900);
+    return () => window.clearTimeout(t);
+  }, [text]);
   const [images, setImages] = useState<AiImage[]>([]);
   const [pending, setPending] = useState(false);
   const [elapsed, setElapsed] = useState(0); // ms since the current request started
@@ -783,7 +790,7 @@ export default function AssistantPanel({ workspace, tasks, open, onOpenChange, o
                 variant="custom"
                 color="#257EF4"
                 eyeColor="#FAFAFA"
-                mood={pending ? 'thinking' : text.trim() ? 'reading' : null}
+                mood={pending ? 'thinking' : text.trim() ? (typingPaused ? 'pondering' : 'reading') : null}
                 readX={Math.min(1, text.length / 48)}
               />
               <span

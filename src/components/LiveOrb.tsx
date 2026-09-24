@@ -20,8 +20,9 @@ export type LiveOrbOptions = {
   /** Little eye dance (e.g. while hovered): eyes dart side to side with happy blinks. Added for Keepup's "Bouncy". */
   dance?: boolean
   /** Added for Bouncy: "reading" looks down at the text being typed (following `readX`, 0 = start, 1 = far end);
+   *  "pondering" looks up to the right (at its thought bubble) with a little nod;
    *  "thinking" looks up and drifts in a slow circle while the colours swirl faster. */
-  mood?: "reading" | "thinking" | null
+  mood?: "reading" | "pondering" | "thinking" | null
   readX?: number
   /** Fires when WebGL is ready (`true`) or torn down (`false`). */
   onHasGl?: (ok: boolean) => void
@@ -432,6 +433,12 @@ export function createLiveOrb(
       const dy = 0.55 + Math.sin(t * 1.7) * 0.22
       look.x += (dx - look.x) * 0.08
       look.y += (dy - look.y) * 0.08
+    } else if (options.mood === "pondering") {
+      // Paused typing: gaze up at the thought bubble, nodding slightly now and then.
+      const t = now / 1000
+      const dy = 0.72 + (reduce ? 0 : Math.max(0, Math.sin(t * 2.4)) * 0.12)
+      look.x += (0.5 - look.x) * 0.12
+      look.y += (dy - look.y) * 0.12
     } else if (options.mood === "reading") {
       // Reading along: eyes down toward the input, moving right as the text grows.
       const dx = -0.05 + Math.min(1, Math.max(0, options.readX ?? 0.5)) * 0.95
