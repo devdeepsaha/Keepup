@@ -123,6 +123,14 @@ export default function AssistantPanel({ workspace, tasks, open, onOpenChange, o
   const [menuOpen, setMenuOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [dancing, setDancing] = useState<'launcher' | 'header' | 'hero' | null>(null); // Bouncy's hover dance
+  // Phones have no hover: a tap on Bouncy makes it dance for a moment instead.
+  const danceTimer = useRef<number | undefined>(undefined);
+  const tapDance = (where: 'launcher' | 'header' | 'hero') => (e: { pointerType: string }) => {
+    if (e.pointerType === 'mouse') return;
+    window.clearTimeout(danceTimer.current);
+    setDancing(where);
+    danceTimer.current = window.setTimeout(() => setDancing(null), 1400);
+  };
   const [picker, setPicker] = useState<{ start: number; query: string } | null>(null);
   const [pickerIndex, setPickerIndex] = useState(0);
   const textarea = useRef<HTMLTextAreaElement>(null);
@@ -479,6 +487,7 @@ export default function AssistantPanel({ workspace, tasks, open, onOpenChange, o
           focusInput();
         }}
         onMouseEnter={() => setDancing('launcher')}
+        onPointerDown={tapDance('launcher')}
         onMouseLeave={() => setDancing(null)}
         aria-label="Open Bouncy"
         title="Bouncy (press /)"
@@ -502,8 +511,8 @@ export default function AssistantPanel({ workspace, tasks, open, onOpenChange, o
           </button>
         ) : (
           <span className="mr-1.5">
-            <span onMouseEnter={() => setDancing('header')} onMouseLeave={() => setDancing(null)} className="inline-flex">
-              <LiveOrb size={26} variant="custom" color="#257EF4" eyeColor="#FAFAFA" dance={dancing === 'header'} />
+            <span onMouseEnter={() => setDancing('header')} onMouseLeave={() => setDancing(null)} onPointerDown={tapDance('header')} className="inline-flex">
+              <LiveOrb size={26} variant="custom" color="#257EF4" eyeColor="#FAFAFA" dance={dancing === 'header'} mood={pending ? 'thinking' : null} />
             </span>
           </span>
         )}
@@ -571,7 +580,7 @@ export default function AssistantPanel({ workspace, tasks, open, onOpenChange, o
         ) : entries.length === 0 ? (
           // Empty chat: mascot + starters
           <div className="flex h-full flex-col items-center justify-center gap-5 px-6 text-center">
-            <span onMouseEnter={() => setDancing('hero')} onMouseLeave={() => setDancing(null)} className="inline-flex">
+            <span onMouseEnter={() => setDancing('hero')} onMouseLeave={() => setDancing(null)} onPointerDown={tapDance('hero')} className="inline-flex">
               <LiveOrb size={72} variant="custom" color="#257EF4" eyeColor="#FAFAFA" dance={dancing === 'hero'} />
             </span>
             <div>
@@ -767,7 +776,15 @@ export default function AssistantPanel({ workspace, tasks, open, onOpenChange, o
           )}
 
           <div className="flex items-start gap-2.5 pl-3 pt-2.5">
-            <LiveOrb size={30} variant="custom" color="#257EF4" eyeColor="#FAFAFA" />
+            {/* Bouncy reads along while you type, and thinks while it works on the answer. */}
+            <LiveOrb
+              size={30}
+              variant="custom"
+              color="#257EF4"
+              eyeColor="#FAFAFA"
+              mood={pending ? 'thinking' : text.trim() ? 'reading' : null}
+              readX={Math.min(1, text.length / 48)}
+            />
             {/* The textarea's own text is transparent; the backdrop behind it draws the same text with tags as pills. */}
             <div className="relative flex-1 min-w-0">
               <div
