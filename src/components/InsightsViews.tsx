@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Task } from '../types';
 import { addDays, dayKey, keyToDate, startOfWeek } from '../lib/dates';
 import { isWorkingDay } from '../lib/cadence';
@@ -106,6 +106,21 @@ export function YearView({ tasks, loading, onOpenDay }: { tasks: Task[]; loading
   const cell = 13;
   const gap = 3;
 
+  // On narrow screens the grids scroll sideways: start them at the current week, not January.
+  const heatScroll = useRef<HTMLDivElement>(null);
+  const rhythmScroll = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const idx = year === thisYear ? Math.max(0, weeks.findIndex((w) => w > todayKey) - 1) : weeks.length - 1;
+    const show = (el: HTMLDivElement | null, before: number, step: number, after: number) => {
+      if (!el) return;
+      // Keep a few weeks of room to the right of this week (the future is empty anyway).
+      el.scrollLeft = Math.max(0, before + (idx + 4) * step - el.clientWidth + after);
+    };
+    show(heatScroll.current, 36, cell + gap, 0);
+    const nameWidth = rhythmScroll.current?.querySelector<HTMLElement>('[data-name]')?.offsetWidth ?? 144;
+    show(rhythmScroll.current, nameWidth + 12, 12 + gap, 64);
+  }, [year, thisYear, weeks, todayKey, loading, rows.length]);
+
   return (
     <div className="mx-auto max-w-7xl px-5 pt-2 pb-10 md:px-8 lg:px-10">
       <Header eyebrow="Insights · Year" title={`${year}.`} muted="How steady were your client updates?">
@@ -154,9 +169,9 @@ export function YearView({ tasks, loading, onOpenDay }: { tasks: Task[]; loading
         {loading ? (
           <p className="py-10 text-center text-sm text-[var(--text-muted)]">Loading…</p>
         ) : (
-          <div className="overflow-x-auto pb-1">
+          <div ref={heatScroll} className="overflow-x-auto pb-1">
             <div className="inline-flex gap-2">
-              <div className="flex flex-col pt-5" style={{ gap }}>
+              <div className="sticky left-0 z-10 flex flex-col bg-[var(--surface)] pr-1 pt-5" style={{ gap }}>
                 {WEEKDAYS.map((d, i) => (
                   <span key={d} className="font-display text-[0.625rem] leading-none text-[var(--text-muted)]" style={{ height: cell, lineHeight: `${cell}px` }}>
                     {i % 2 === 0 ? d : ''}
@@ -230,13 +245,14 @@ export function YearView({ tasks, loading, onOpenDay }: { tasks: Task[]; loading
         {rows.length === 0 ? (
           <p className="py-6 text-center text-sm text-[var(--text-muted)]">No client rhythms in {year} yet.</p>
         ) : (
-          <div className="overflow-x-auto">
+          <div ref={rhythmScroll} className="overflow-x-auto">
             <div className="inline-flex min-w-full flex-col gap-2">
               {rows.map((r) => {
                 const color = colorOf(r.client.key);
                 return (
                   <div key={r.client.key} className="flex items-center gap-3">
-                    <span className="flex w-36 shrink-0 items-center gap-2 truncate text-sm">
+                    {/* Name and score stay put while the weeks scroll sideways. */}
+                    <span data-name className="sticky left-0 z-10 flex w-24 shrink-0 items-center gap-2 truncate bg-[var(--surface)] text-sm sm:w-36">
                       <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: color }} />
                       <span className="truncate">{r.client.name}</span>
                     </span>
@@ -245,7 +261,7 @@ export function YearView({ tasks, loading, onOpenDay }: { tasks: Task[]; loading
                         <WeekSquare key={weeks[i]} week={w} color={color} />
                       ))}
                     </div>
-                    <span className="ml-auto w-14 shrink-0 pl-2 text-right font-display text-xs tabular-nums text-[var(--text-muted)]">
+                    <span className="sticky right-0 ml-auto w-12 shrink-0 bg-[var(--surface)] pl-2 text-right font-display text-xs tabular-nums text-[var(--text-muted)]">
                       {r.owed ? `${Math.round((r.met / r.owed) * 100)}%` : '–'}
                     </span>
                   </div>
