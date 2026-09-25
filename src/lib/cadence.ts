@@ -107,7 +107,22 @@ export function cadenceFor(task: Task, todayKey: string, scope?: RhythmScope): C
     cursor = latest ? shift(latest, -MIN_GAP_DAYS) : null;
   }
 
-  if (!nextFrom || !latest || nextFrom > latest) {
+  // Nothing more fits this week (e.g. you just checked in and the rest of the week is off): nothing to act
+  // on until next week, so no alarm. Insights still count the missed one.
+  if (!nextFrom) {
+    const nextWeek = workingOnOrAfter(shift(weekEnd, 1), shift(weekEnd, 7));
+    return {
+      ...base,
+      tone: 'green',
+      progress: 0,
+      label: `${count}/${target} this week (${remaining} missed). Next ${task.waiting_since ? 'nudge' : 'check-in'} ${nextWeek ? weekday(nextWeek) : 'next week'}`,
+      nextFrom: null,
+      latest: null,
+    };
+  }
+
+  // Behind but one still fits today: do it now.
+  if (!latest || nextFrom > latest) {
     return {
       ...base,
       tone: 'red',

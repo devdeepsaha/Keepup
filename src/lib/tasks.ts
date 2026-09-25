@@ -34,6 +34,15 @@ export function daysUntilDue(task: Task, todayKey: string): number | null {
   return Math.round((keyToDate(task.due_date).getTime() - keyToDate(todayKey).getTime()) / DAY_MS);
 }
 
+// Past its due date, but you've updated it in the last two days (after the date passed): you're on it,
+// so it's not an alarm for now. It needs a new date, and turns red again after two quiet days.
+export function overdueHandled(task: Task, todayKey: string) {
+  if (!task.due_date || task.due_date >= todayKey) return false;
+  const last = task.task_updates.map((u) => dayKey(u.created_at)).sort().at(-1);
+  if (!last || last <= task.due_date) return false;
+  return Math.round((keyToDate(todayKey).getTime() - keyToDate(last).getTime()) / DAY_MS) <= 2;
+}
+
 // Why an active task needs attention, or null if it's on track. `scope` groups tasks by client so the
 // client's check-in rhythm is counted once (on its lead task).
 export function attentionFor(task: Task, now: number, todayKey: string, scope?: RhythmScope): Attention | null {
@@ -43,7 +52,7 @@ export function attentionFor(task: Task, now: number, todayKey: string, scope?: 
   const waiting = !!task.waiting_since;
   const who = scope && scope.size > 1 ? `${scope.clientName}: ` : '';
   const waitingFor = task.waiting_for ? ` (ask for ${task.waiting_for})` : '';
-  if (due !== null && due < 0) return { kind: 'due', label: `Overdue ${-due}d`, tone: 'red', score: 1000 - due };
+  if (due !== null && due < 0 && !overdueHandled(task, todayKey)) return { kind: 'due', label: `Overdue ${-due}d`, tone: 'red', score: 1000 - due };
   // A planned client update is due: send it today.
   const planned = (task.planned_updates ?? [])
     .filter((p) => p.status === 'planned' && p.send_on <= todayKey)
@@ -168,10 +177,15 @@ export function timerFor(task: Task, now: number, todayKey: string, scope?: Rhyt
     const start = new Date(task.created_at).getTime();
     const end = keyToDate(task.due_date).getTime() + DAY_MS; // end of the due day
     const dueProgress = end > start ? Math.min(1, Math.max(0, (now - start) / (end - start))) : 1;
-    const dueTone: Tone = due <= 0 ? 'red' : due === 1 || dueProgress >= 0.75 ? 'orange' : 'green';
-    progress = Math.max(progress, dueProgress);
-    if (TONE_RANK[dueTone] > TONE_RANK[tone]) tone = dueTone;
-    parts.unshift(formatDue(task.due_date, todayKey));
+    if (overdueHandled(task, todayKey)) {
+      // Updated since the date passed: calm for now, but it needs a new date.
+      parts.unshift(`Was due ${keyToDate(task.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}; updated since, set a new date`);
+    } else {
+      const dueTone: Tone = due <= 0 ? 'red' : due === 1 || dueProgress >= 0.75 ? 'orange' : 'green';
+      progress = Math.max(progress, dueProgress);
+      if (TONE_RANK[dueTone] > TONE_RANK[tone]) tone = dueTone;
+      parts.unshift(formatDue(task.due_date, todayKey));
+    }
   }
   // A full ring means the time is up: always red, whatever the individual rules said.
   if (progress >= 0.999) tone = 'red';
