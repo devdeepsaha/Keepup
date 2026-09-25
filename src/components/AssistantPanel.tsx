@@ -119,6 +119,28 @@ export default function AssistantPanel({ workspace, tasks, open, onOpenChange, o
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [text, setText] = useState('');
+  // Phones: when the keyboard opens, fit the panel to the visible area above it, so the header stays put
+  // and only the input rises with the keyboard (instead of the whole page scrolling up).
+  const [viewport, setViewport] = useState<{ top: number; height: number } | null>(null);
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv || !open) return;
+    const update = () => {
+      const keyboardUp = window.innerHeight - vv.height > 80;
+      setViewport(keyboardUp ? { top: vv.offsetTop, height: vv.height } : null);
+    };
+    update();
+    vv.addEventListener('resize', update);
+    vv.addEventListener('scroll', update);
+    return () => {
+      vv.removeEventListener('resize', update);
+      vv.removeEventListener('scroll', update);
+    };
+  }, [open]);
+  // Keyboard opened or closed: keep the latest message in view.
+  useEffect(() => {
+    threadEnd.current?.scrollIntoView({ block: 'nearest' });
+  }, [viewport?.height]);
   // Typing paused for a moment: Bouncy looks up at its thought bubble instead of reading along.
   const [typingPaused, setTypingPaused] = useState(false);
   useEffect(() => {
@@ -525,7 +547,8 @@ export default function AssistantPanel({ workspace, tasks, open, onOpenChange, o
   return (
     <aside
       aria-label="Bouncy"
-      className="fixed inset-y-0 right-0 z-30 flex w-full sm:w-[380px] flex-col border-l border-[var(--line-color)] bg-[var(--surface)] shadow-xl lg:shadow-none"
+      style={viewport ? { top: viewport.top, height: viewport.height, bottom: 'auto' } : undefined}
+      className="fixed inset-y-0 right-0 z-30 flex w-full sm:w-[380px] flex-col overscroll-contain border-l border-[var(--line-color)] bg-[var(--surface)] shadow-xl lg:shadow-none"
     >
       {/* Header */}
       <div className="flex h-14 shrink-0 items-center gap-1 border-b border-[var(--line-color)] pl-3 pr-2">
