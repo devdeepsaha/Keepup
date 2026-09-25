@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { useTasks } from '../hooks/useTasks';
 import { taskHandles } from '../lib/handles';
 import { ClientColorsProvider } from '../lib/clientColors';
-import { usePrefs } from '../lib/prefs';
+import { usePrefs, type Density, type Theme } from '../lib/prefs';
+import { supabase } from '../lib/supabase';
 import type { Workspace as WorkspaceId } from '../types';
 import ArchiveView from './ArchiveView';
 import AssistantPanel from './AssistantPanel';
@@ -196,6 +197,38 @@ export default function Shell({ user }: { user: User }) {
     setAssistantOpen(true);
     setPrefill({ text: `@${handle} `, nonce: Date.now() });
   };
+
+  // Settings follow the account, not just this browser: saved to your profile, restored wherever you sign in
+  // (another device, another address). The profile wins once on load; after that, changes are saved to it.
+  const restored = useRef(false);
+  const savedPrefs = useRef<Record<string, unknown>>(user.user_metadata?.prefs ?? {});
+  useEffect(() => {
+    if (restored.current) return;
+    restored.current = true;
+    const saved = user.user_metadata?.prefs as
+      | { theme?: Theme; density?: Density; workspace?: WorkspaceId; sidebarWidth?: number }
+      | undefined;
+    if (!saved) return;
+    if (saved.theme && saved.theme !== prefs.theme) prefs.setTheme(saved.theme);
+    if (saved.density && saved.density !== prefs.density) prefs.setDensity(saved.density);
+    if (saved.workspace && saved.workspace !== workspace) switchWorkspace(saved.workspace);
+    if (saved.sidebarWidth && saved.sidebarWidth !== width) {
+      setWidth(saved.sidebarWidth);
+      saveWidth(saved.sidebarWidth);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    if (!restored.current || resizing) return;
+    const next = { theme: prefs.theme, density: prefs.density, workspace, sidebarWidth: width };
+    if (Object.entries(next).every(([k, v]) => savedPrefs.current[k] === v)) return;
+    const t = window.setTimeout(() => {
+      supabase.auth.updateUser({ data: { prefs: next } }).then(({ error }) => {
+        if (!error) savedPrefs.current = next;
+      });
+    }, 800);
+    return () => window.clearTimeout(t);
+  }, [prefs.theme, prefs.density, workspace, width, resizing]);
 
   const handles = useMemo(() => taskHandles(tasks), [tasks]);
   const sidebarWidth = collapsed ? SIDEBAR_ICON_WIDTH : width;
