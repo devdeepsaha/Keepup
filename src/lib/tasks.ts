@@ -9,7 +9,7 @@ export const STALE_DAYS = 7; // red
 export const QUIET_DAYS = 4; // orange
 
 export interface Attention {
-  kind: 'due' | 'stale' | 'cadence';
+  kind: 'due' | 'stale' | 'cadence' | 'planned';
   label: string;
   tone: 'red' | 'orange';
   score: number; // higher = more urgent
@@ -44,6 +44,17 @@ export function attentionFor(task: Task, now: number, todayKey: string, scope?: 
   const who = scope && scope.size > 1 ? `${scope.clientName}: ` : '';
   const waitingFor = task.waiting_for ? ` (ask for ${task.waiting_for})` : '';
   if (due !== null && due < 0) return { kind: 'due', label: `Overdue ${-due}d`, tone: 'red', score: 1000 - due };
+  // A planned client update is due: send it today.
+  const planned = (task.planned_updates ?? [])
+    .filter((p) => p.status === 'planned' && p.send_on <= todayKey)
+    .sort((a, b) => a.send_on.localeCompare(b.send_on))[0];
+  if (planned)
+    return {
+      kind: 'planned',
+      label: `${who}${planned.send_on < todayKey ? 'Planned update late' : 'Send today'}: ${planned.title}`,
+      tone: 'red',
+      score: planned.send_on < todayKey ? 950 : 800,
+    };
   if (due === 0) return { kind: 'due', label: 'Due today', tone: 'red', score: 900 };
   // Rhythm tasks follow their weekly check-in schedule instead of the generic quiet/stale rule.
   if (cadence) {

@@ -56,6 +56,7 @@ const KIND_LABEL: Record<AiResult['kind'], string> = {
   renamed: 'Renamed',
   rhythm: 'Rhythm',
   waiting: 'On hold',
+  planned: 'Planned',
   skipped: 'Skipped',
 };
 

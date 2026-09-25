@@ -208,6 +208,19 @@ export default function CalendarView({ tasks, loading, initialDay, onToggle }: P
   }, [tasks, monthKey, fromKey, toKey, todayKey]);
   const ctx = useMemo(() => ({ activity, filters, marks, showCheckIns }), [activity, filters, marks, showCheckIns]);
 
+  // Planned client updates (not sent yet), by the day they're due.
+  const plannedByDay = useMemo(() => {
+    const map = new Map<string, { task: Task; title: string }[]>();
+    for (const task of tasks)
+      for (const p of task.planned_updates ?? []) {
+        if (p.status !== 'planned') continue;
+        const list = map.get(p.send_on) ?? [];
+        list.push({ task, title: p.title });
+        map.set(p.send_on, list);
+      }
+    return map;
+  }, [tasks]);
+
   // Everything in the selection, newest day first (capped so a huge range stays fast).
   const days = useMemo(() => {
     const keys: string[] = [];
@@ -249,8 +262,8 @@ export default function CalendarView({ tasks, loading, initialDay, onToggle }: P
     : `${fmt(from, { month: 'short', day: 'numeric' })} – ${fmt(to, { month: 'short', day: 'numeric' })}`;
 
   const timeline = days
-    .map((k) => ({ key: k, a: activity.get(k), m: showCheckIns ? (marks.get(k) ?? []) : [] }))
-    .filter(({ a, m }) => countOf(a, filters) > 0 || m.length > 0);
+    .map((k) => ({ key: k, a: activity.get(k), m: showCheckIns ? (marks.get(k) ?? []) : [], p: showCheckIns ? (plannedByDay.get(k) ?? []) : [] }))
+    .filter(({ a, m, p }) => countOf(a, filters) > 0 || m.length > 0 || p.length > 0);
 
   return (
     <div className="px-5 md:px-8 lg:px-10 pt-2 pb-5 max-w-7xl mx-auto">
@@ -404,7 +417,7 @@ export default function CalendarView({ tasks, loading, initialDay, onToggle }: P
             <p className="py-6 text-center text-sm text-[var(--text-muted)]">Nothing here{single ? ' on this day' : ' in this range'}.</p>
           ) : (
             <div className="space-y-4">
-              {timeline.map(({ key, a, m }) => (
+              {timeline.map(({ key, a, m, p }) => (
                 <section key={key}>
                   {!single && (
                     <div className="sticky top-0 bg-[var(--surface)] py-1 font-display text-[0.6875rem] font-semibold uppercase tracking-widest text-[var(--text-muted)]">
@@ -412,6 +425,18 @@ export default function CalendarView({ tasks, loading, initialDay, onToggle }: P
                     </div>
                   )}
                   <div className="divide-y divide-[var(--line-color)]/60">
+                    {p.map(({ task, title }) => (
+                      <Row key={`p${task.id}${title}`}>
+                        <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full ring-2 ring-[#257ef4]/40" style={{ background: colorOf(clientKeyOf(task)) }} />
+                        <span className="flex-1 min-w-0">
+                          <span className="block truncate font-display text-[0.6875rem] uppercase tracking-wider text-[var(--text-muted)]">{task.text}</span>
+                          <span className="block leading-snug">{title}</span>
+                        </span>
+                        <span className={`shrink-0 font-display text-[0.6875rem] ${key < todayKey ? 'text-red-500' : 'text-[#257ef4]'}`}>
+                          {key < todayKey ? 'update not sent' : 'planned update'}
+                        </span>
+                      </Row>
+                    ))}
                     {m.map((mark) => (
                       <Row key={`m${mark.client}${mark.state}`}>
                         <span className="mt-1 flex h-3 w-4 shrink-0 items-center justify-center">

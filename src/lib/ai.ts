@@ -10,10 +10,17 @@ export type Undo =
   | { type: 'set_due'; taskId: string; dueDate: string | null }
   | { type: 'rename'; taskId: string; text: string }
   | { type: 'set_cadence'; taskId: string; perWeek: number | null }
-  | { type: 'set_waiting'; taskId: string; since: string | null; waitingFor: string | null };
+  | { type: 'set_waiting'; taskId: string; since: string | null; waitingFor: string | null }
+  | {
+      type: 'replace_planned';
+      taskId: string;
+      ids: string[];
+      restore: { id: string; send_on: string; title: string; text: string; position: number }[];
+      deleteTask?: boolean;
+    };
 
 export interface AiResult {
-  kind: 'added' | 'logged' | 'completed' | 'reopened' | 'due' | 'renamed' | 'rhythm' | 'waiting' | 'skipped';
+  kind: 'added' | 'logged' | 'completed' | 'reopened' | 'due' | 'renamed' | 'rhythm' | 'waiting' | 'planned' | 'skipped';
   title: string;
   detail: string | null;
   undo: Undo | null;
@@ -123,6 +130,13 @@ export async function undoResult(undo: Undo) {
       return check(await tasks.update({ cadence_per_week: undo.perWeek }).eq('id', undo.taskId));
     case 'set_waiting':
       return check(await tasks.update({ waiting_since: undo.since, waiting_for: undo.waitingFor }).eq('id', undo.taskId));
+    case 'replace_planned':
+      // Back to the plan that was there before (or no task at all, if the plan created it).
+      if (undo.deleteTask) return check(await tasks.delete().eq('id', undo.taskId));
+      if (undo.ids.length) check(await supabase.from('planned_updates').delete().in('id', undo.ids));
+      if (undo.restore.length)
+        check(await supabase.from('planned_updates').insert(undo.restore.map((r) => ({ ...r, task_id: undo.taskId }))));
+      return;
   }
 }
 

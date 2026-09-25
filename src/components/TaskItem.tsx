@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import type { Task } from '../types';
+import type { PlannedUpdate, Task } from '../types';
 import { daysSince, daysUntilDue, timerFor, urgencyType, type Attention } from '../lib/tasks';
 import { keyToDate } from '../lib/dates';
 import { CADENCE_OPTIONS, CADENCE_RULE, cadenceFor, cadenceName } from '../lib/cadence';
 import { cleanHandle, clientKeyOf, type RhythmScope } from '../lib/handles';
 import TimerRing from './TimerRing';
+import PlannedUpdates from './PlannedUpdates';
 
 const STRIKE_MS = 650; // circle fills + line draws through the title
 const LEAVE_MS = 450; // row folds away, then the task moves lists
@@ -30,6 +31,9 @@ interface Props {
   onArchive: (id: string) => void;
   onAddUpdate: (id: string, text: string) => void;
   onDeleteUpdate: (taskId: string, updateId: string) => void;
+  onMarkPlannedSent: (taskId: string, update: PlannedUpdate) => void;
+  onMovePlanned: (taskId: string, update: PlannedUpdate, sendOn: string) => void;
+  onDeletePlanned: (taskId: string, update: PlannedUpdate) => void;
 }
 
 const shortDate = (d: Date) => d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
@@ -55,6 +59,9 @@ export default function TaskItem({
   onArchive,
   onAddUpdate,
   onDeleteUpdate,
+  onMarkPlannedSent,
+  onMovePlanned,
+  onDeletePlanned,
 }: Props) {
   const [updateText, setUpdateText] = useState('');
   const [isEditing, setIsEditing] = useState(false);
@@ -278,8 +285,10 @@ export default function TaskItem({
                     }}
                     className="px-2.5 py-1 rounded-full border border-[var(--accent)] font-semibold uppercase tracking-wider text-[0.625rem] text-[var(--accent)] hover:bg-[image:var(--accent-gradient)] hover:border-transparent hover:text-white transition-colors cursor-pointer"
                   >
-                    <span className="sm:hidden">{waiting ? 'Nudge' : 'Log update'}</span>
-                    <span className="max-sm:hidden">{waiting ? 'Log nudge' : cadence ? 'Log client update' : 'Log update'}</span>
+                    <span className="sm:hidden">{attention.kind === 'planned' ? 'Send update' : waiting ? 'Nudge' : 'Log update'}</span>
+                    <span className="max-sm:hidden">
+                      {attention.kind === 'planned' ? 'Send planned update' : waiting ? 'Log nudge' : cadence ? 'Log client update' : 'Log update'}
+                    </span>
                   </button>
                 )}
                 {!done && (
@@ -318,6 +327,14 @@ export default function TaskItem({
           <div className={`expand-grid ${isOpen ? 'is-open' : ''}`}>
             <div className="expand-inner">
               <div className="pl-9 pb-4 pr-1 space-y-3">
+                {/* 0. Planned client updates, with today's one ready to copy */}
+                <PlannedUpdates
+                  planned={(task.planned_updates ?? []).filter((p) => p.status === 'planned')}
+                  todayKey={todayKey}
+                  onMarkSent={(u) => onMarkPlannedSent(task.id, u)}
+                  onMove={(u, d) => onMovePlanned(task.id, u, d)}
+                  onDelete={(u) => onDeletePlanned(task.id, u)}
+                />
                 {/* 1. Write an update: the main thing you open a task for */}
                 <form
                   onSubmit={handleAddUpdate}

@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DEFAULT_CADENCE } from '../lib/cadence';
 import { supabase } from '../lib/supabase';
-import type { Task, TaskUpdate, Workspace } from '../types';
+import type { PlannedUpdate, Task, TaskUpdate, Workspace } from '../types';
 
 const SELECT =
-  'id, text, done, completed_at, due_date, cadence_per_week, handle, client, waiting_since, waiting_for, workspace, archived_at, deleted_at, last_updated, created_at, task_updates (id, task_id, text, created_at)';
+  'id, text, done, completed_at, due_date, cadence_per_week, handle, client, waiting_since, waiting_for, workspace, archived_at, deleted_at, last_updated, created_at, task_updates (id, task_id, text, created_at), planned_updates (id, task_id, send_on, title, text, position, status, sent_at)';
 
 export const TRASH_DAYS = 30;
 
@@ -64,6 +64,7 @@ export function useTasks(userId: string, workspace: Workspace) {
       .channel(`agenda-${userId}-${workspace}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks', filter: `user_id=eq.${userId}` }, scheduleRefetch)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'task_updates', filter: `user_id=eq.${userId}` }, scheduleRefetch)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'planned_updates', filter: `user_id=eq.${userId}` }, scheduleRefetch)
       .subscribe();
     return () => {
       window.clearTimeout(refetchTimer.current);
@@ -203,6 +204,44 @@ export function useTasks(userId: string, workspace: Workspace) {
     [commit, setTasks],
   );
 
+  // Planned client updates.
+  const patchPlanned = useCallback(
+    (taskId: string, id: string, change: ((p: PlannedUpdate) => PlannedUpdate) | null) =>
+      setTasks((prev) =>
+        prev.map((t) =>
+          t.id === taskId
+            ? { ...t, planned_updates: (t.planned_updates ?? []).flatMap((p) => (p.id !== id ? [p] : change ? [change(p)] : [])) }
+            : t,
+        ),
+      ),
+    [setTasks],
+  );
+  // Sent: logged as a check-in with the message itself.
+  const markPlannedSent = useCallback(
+    (taskId: string, update: PlannedUpdate) => {
+      const sentAt = new Date().toISOString();
+      patchPlanned(taskId, update.id, (p) => ({ ...p, status: 'sent', sent_at: sentAt }));
+      const summary = update.text.replace(/\s+/g, ' ').trim();
+      addUpdate(taskId, `Sent client update (${update.title}): ${summary.length > 150 ? `${summary.slice(0, 147)}…` : summary}`);
+      return commit(supabase.from('planned_updates').update({ status: 'sent', sent_at: sentAt }).eq('id', update.id));
+    },
+    [commit, patchPlanned, addUpdate],
+  );
+  const movePlanned = useCallback(
+    (taskId: string, update: PlannedUpdate, sendOn: string) => {
+      patchPlanned(taskId, update.id, (p) => ({ ...p, send_on: sendOn }));
+      return commit(supabase.from('planned_updates').update({ send_on: sendOn }).eq('id', update.id));
+    },
+    [commit, patchPlanned],
+  );
+  const deletePlanned = useCallback(
+    (taskId: string, update: PlannedUpdate) => {
+      patchPlanned(taskId, update.id, null);
+      return commit(supabase.from('planned_updates').delete().eq('id', update.id));
+    },
+    [commit, patchPlanned],
+  );
+
   const deleteUpdate = useCallback(
     (taskId: string, updateId: string) => {
       setTasks((prev) =>
@@ -242,5 +281,8 @@ export function useTasks(userId: string, workspace: Workspace) {
     purgeTask,
     addUpdate,
     deleteUpdate,
+    markPlannedSent,
+    movePlanned,
+    deletePlanned,
   };
 }

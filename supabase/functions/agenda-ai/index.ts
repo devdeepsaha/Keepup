@@ -17,7 +17,7 @@ const GEMINI_FALLBACKS = ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-fl
 const GEMINI_HEDGE_MS = 2_500;
 const GEMINI_TOTAL_TIMEOUT_MS = 35_000;
 // Replies are small JSON; capping output stops a model that gets stuck emitting padding in JSON mode.
-const GEMINI_MAX_OUTPUT_TOKENS = 2_048;
+const GEMINI_MAX_OUTPUT_TOKENS = 4096; // room for a plan of several client messages
 const GEMINI_RETRYABLE = new Set([404, 429, 500, 503, 504]);
 // Set once a working model has been found by asking the API (survives while the function stays warm).
 let discoveredGeminiModel: string | null = null;
@@ -79,6 +79,15 @@ interface TaskRow {
   task_updates: { id: string; text: string; created_at: string }[];
   waiting_since?: string | null;
   waiting_for?: string | null;
+  planned_updates?: { send_on: string; title: string; status: string }[];
+}
+
+interface PlannedRow {
+  id: string;
+  send_on: string;
+  title: string;
+  text: string;
+  position: number;
 }
 
 // Undo recipes the client can replay to reverse each change.
@@ -90,10 +99,11 @@ type Undo =
   | { type: 'set_due'; taskId: string; dueDate: string | null }
   | { type: 'rename'; taskId: string; text: string }
   | { type: 'set_cadence'; taskId: string; perWeek: number | null }
-  | { type: 'set_waiting'; taskId: string; since: string | null; waitingFor: string | null };
+  | { type: 'set_waiting'; taskId: string; since: string | null; waitingFor: string | null }
+  | { type: 'replace_planned'; taskId: string; ids: string[]; restore: PlannedRow[]; deleteTask?: boolean };
 
 interface Result {
-  kind: 'added' | 'logged' | 'completed' | 'reopened' | 'due' | 'renamed' | 'rhythm' | 'waiting' | 'skipped';
+  kind: 'added' | 'logged' | 'completed' | 'reopened' | 'due' | 'renamed' | 'rhythm' | 'waiting' | 'planned' | 'skipped';
   title: string;
   detail: string | null;
   undo: Undo | null;
@@ -138,6 +148,61 @@ const newTaskCadence = (n: number | null, workspace: 'agency' | 'personal') =>
   n === 0 ? null : (validCadence(n) ?? (workspace === 'agency' ? DEFAULT_CADENCE : null));
 const clean = (s: string | null, max: number) => (s ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
 
+// ---------- pacing planned client updates ----------
+// Date keys are plain calendar days (YYYY-MM-DD), handled in UTC so no timezone can shift them.
+const addDaysKey = (key: string, n: number) => new Date(Date.parse(key) + n * DAY_MS).toISOString().slice(0, 10);
+const dowOf = (key: string) => new Date(Date.parse(key)).getUTCDay();
+// Same working days as the app: not Sundays, not the 2nd or 4th Saturday.
+function isWorkingKey(key: string) {
+  const d = dowOf(key);
+  if (d === 0) return false;
+  if (d === 6) {
+    const nth = Math.ceil(Number(key.slice(8, 10)) / 7);
+    return nth !== 2 && nth !== 4;
+  }
+  return true;
+}
+// Preferred days (0 = Monday): twice a week → Tue + Fri; three times → Mon, Wed, Fri.
+const IDEAL_DAYS: Record<number, number[]> = { 2: [1, 4], 3: [0, 2, 4] };
+
+// Up to n dates from `from` on the rhythm's days, a day apart, skipping taken days, not after `until`.
+function rhythmDates(n: number, from: string, perWeek: number, taken: Set<string>, until: string | null) {
+  const ideal = IDEAL_DAYS[perWeek];
+  const out: string[] = [];
+  let last: string | null = null;
+  const limit = until ?? addDaysKey(from, 7 * 26);
+  for (let k = from; k <= limit && out.length < n; k = addDaysKey(k, 1)) {
+    if (!isWorkingKey(k) || taken.has(k) || !ideal.includes((dowOf(k) + 6) % 7)) continue;
+    if (last && (Date.parse(k) - Date.parse(last)) / DAY_MS < 2) continue;
+    out.push(k);
+    last = k;
+  }
+  return out;
+}
+
+// Dates for the parts that weren't pinned to a day: 2 a week (or the task's 3), from tomorrow; never more
+// than 3 a week. With a deadline they finish the day before it, going up to 3 a week; if even that can't fit
+// them, the extras share the last day.
+function scheduleParts(n: number, today: string, cadence: number | null, due: string | null, taken: Set<string>) {
+  if (!n) return [];
+  const from = addDaysKey(today, 1);
+  const until = due ? addDaysKey(due, -1) : null;
+  const base = cadence === 3 ? 3 : 2;
+  if (until && until >= from) {
+    for (const perWeek of base === 3 ? [3] : [2, 3]) {
+      const dates = rhythmDates(n, from, perWeek, taken, until);
+      if (dates.length === n) return dates;
+    }
+    const dates = rhythmDates(n, from, 3, taken, until);
+    if (!dates.length) {
+      for (let k = until; k >= from; k = addDaysKey(k, -1)) if (isWorkingKey(k)) { dates.push(k); break; }
+    }
+    while (dates.length && dates.length < n) dates.push(dates[dates.length - 1]);
+    if (dates.length) return dates;
+  }
+  return rhythmDates(n, from, base, taken, null);
+}
+
 // ---------- the per-request context block ----------
 
 type ClientInfo = { key: string; name: string; taskIds: string[] };
@@ -181,6 +246,10 @@ function buildContext(tasks: TaskRow[], clock: Clock, tzName: string, clients: C
           days.length ? days.map((d) => `${weekdayOf(d)} ${d}`).join(', ') : 'none'
         }`,
       );
+    }
+    const plan = (t.planned_updates ?? []).filter((p) => p.status === 'planned').sort((a, b) => a.send_on.localeCompare(b.send_on));
+    if (plan.length) {
+      parts.push(`PLANNED CLIENT UPDATES (not sent yet): ${plan.map((p) => `${weekdayOf(p.send_on)} ${p.send_on} "${p.title}"`).join(', ')}`);
     }
     const logs = [...t.task_updates]
       .sort((a, b) => b.created_at.localeCompare(a.created_at))
@@ -236,6 +305,8 @@ function buildContext(tasks: TaskRow[], clock: Clock, tzName: string, clients: C
 
 // "Hotel Sonajhuri website" and "hotel  sonajhuri Website!" are the same task.
 const titleKey = (title: string) => title.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+
+const weekdayOf = (key: string) => new Date(Date.parse(key)).toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' });
 
 async function applyActions(db: SupabaseClient, actions: Action[], refs: Map<string, TaskRow>, clock: Clock, workspace: WorkspaceId) {
   const results: Result[] = [];
@@ -321,6 +392,78 @@ async function applyActions(db: SupabaseClient, actions: Action[], refs: Map<str
               .filter(Boolean)
               .join(' · ') || null,
         undo: { type: 'delete_task', taskId: data.id },
+      });
+      continue;
+    }
+
+    if (a.type === 'plan_updates') {
+      // Target: the referenced task, an existing task with this title, or a new one.
+      let target: { id: string; text: string; cadence: number | null; due: string | null } | null = task
+        ? { id: task.id, text: task.text, cadence: task.cadence_per_week, due: task.due_date }
+        : null;
+      let created = false;
+      if (!target) {
+        const title = clean(a.text, 500);
+        const same = title ? existing.get(titleKey(title)) : undefined;
+        if (same) {
+          const { data } = await db.from('tasks').select('cadence_per_week, due_date').eq('id', same.id).single();
+          target = { id: same.id, text: same.text, cadence: data?.cadence_per_week ?? DEFAULT_CADENCE, due: data?.due_date ?? null };
+        } else if (title) {
+          const { data, error } = await db
+            .from('tasks')
+            .insert({ text: title, cadence_per_week: workspace === 'agency' ? DEFAULT_CADENCE : null, workspace })
+            .select('id')
+            .single();
+          if (error) {
+            skip(title, error.message);
+            continue;
+          }
+          target = { id: data.id, text: title, cadence: DEFAULT_CADENCE, due: null };
+          existing.set(titleKey(title), { id: data.id, text: title, last_updated: new Date().toISOString() });
+          created = true;
+        }
+      }
+      if (!target) {
+        skip(a.task_ref ?? 'Unknown task', "Couldn't find that task");
+        continue;
+      }
+      const parts = (a.parts ?? [])
+        .map((p) => ({
+          title: clean(p?.title ?? null, 120),
+          text: String(p?.text ?? '').replace(/[ \t]+/g, ' ').trim().slice(0, 2000),
+          on: p?.send_on && isDateKey(p.send_on) && p.send_on >= clock.today ? p.send_on : null,
+        }))
+        .filter((p) => p.title && p.text)
+        .slice(0, 12);
+      if (!parts.length) {
+        skip(target.text, 'no updates to plan');
+        continue;
+      }
+      // A new plan replaces whatever was still waiting to be sent.
+      const { data: old } = await db
+        .from('planned_updates')
+        .select('id, send_on, title, text, position')
+        .eq('task_id', target.id)
+        .eq('status', 'planned');
+      if (old?.length) await db.from('planned_updates').delete().in('id', old.map((o) => o.id));
+      const pinned = new Set(parts.filter((p) => p.on).map((p) => p.on!));
+      const dates = scheduleParts(parts.filter((p) => !p.on).length, clock.today, target.cadence, target.due, pinned);
+      let next = 0;
+      const rows = parts.map((p, i) => ({ task_id: target!.id, send_on: p.on ?? dates[next++], title: p.title, text: p.text, position: i }));
+      const { data: inserted, error } = await db.from('planned_updates').insert(rows).select('id, send_on');
+      if (error || !inserted) {
+        skip(target.text, error?.message ?? 'could not save the plan');
+        continue;
+      }
+      const days = inserted.map((r) => r.send_on as string).sort();
+      const short = (k: string) => `${weekdayOf(k)} ${Number(k.slice(8))} ${new Date(Date.parse(k)).toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' })}`;
+      results.push({
+        kind: 'planned',
+        title: target.text,
+        detail: `${rows.length} ${rows.length === 1 ? 'update' : 'updates'}, ${days[0] === clock.today ? 'first one today' : short(days[0])}${
+          days.length > 1 ? ` → ${short(days[days.length - 1])}` : ''
+        }`,
+        undo: { type: 'replace_planned', taskId: target.id, ids: inserted.map((r) => r.id as string), restore: (old ?? []) as PlannedRow[], deleteTask: created },
       });
       continue;
     }
@@ -694,7 +837,7 @@ async function handle(req: Request): Promise<Response> {
   const { data: tasks, error: tasksError } = await db
     .from('tasks')
     .select(
-      'id, text, done, completed_at, due_date, cadence_per_week, waiting_since, waiting_for, last_updated, created_at, task_updates (id, text, created_at)',
+      'id, text, done, completed_at, due_date, cadence_per_week, waiting_since, waiting_for, last_updated, created_at, task_updates (id, text, created_at), planned_updates (send_on, title, status)',
     )
     .eq('workspace', workspace)
     .is('deleted_at', null)

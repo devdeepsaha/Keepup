@@ -22,6 +22,19 @@ export interface Task {
   last_updated: string;
   created_at: string;
   task_updates: TaskUpdate[];
+  planned_updates?: PlannedUpdate[]; // client updates planned for later check-in days
+}
+
+// A client update planned for a later day (finished work shared in parts).
+export interface PlannedUpdate {
+  id: string;
+  task_id: string;
+  send_on: string; // 'YYYY-MM-DD'
+  title: string;
+  text: string; // the message, ready to send
+  position: number;
+  status: 'planned' | 'sent';
+  sent_at: string | null;
 }
 
 export type Workspace = 'agency' | 'personal';

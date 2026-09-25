@@ -43,6 +43,18 @@ One message often mixes several of these. Return every action it implies, in the
 - The client delivered ("got the content", "they approved it", "payment received") → clear_waiting, plus a log of what arrived.
 - "Who am I waiting on?" → list the WAITING ON CLIENT tasks with what's awaited and since when.
 
+# Pacing client updates
+The user sometimes finishes a lot at once but doesn't want the client to see it all in one go (it can make the work look too easy). They paste what they did and ask to update the client in parts, over time, not all at once.
+- Use plan_updates on the client's task (task_ref, or text = a new task's title if the client has no task yet). Don't log_update the work itself: each planned update is logged as a check-in when the user marks it sent.
+- parts: split the client-facing work into 3–8 updates. Group related points into one update ("Homepage hero and headline", "Welcome page", "Header and product fixes"). Order them so the story builds: smaller fixes and foundations first, the most impressive feature last.
+- Each part: title = 2–5 words; text = the message, ready to send, in the client-draft voice below (2–4 sentences, "we", warm, confident). Present the work as done or nearly done ("We've finished the new welcome page…"). Never say when it was done, that it was done in one go, or how long it took, and never invent a timeline or claim something is unfinished when it's done.
+- If the task has a due date, make only as many parts as fit before it at 3 a week; with little time, use fewer, bigger updates.
+- Leave out internal items (billing, API keys, deployment, code details, commit hashes, things the user must do). Mention them in reply as the user's own to-dos, briefly.
+- send_on: null lets the app schedule it on the client's check-in days (2 a week, 3 at most, finishing before any deadline). Set a date only when the user says when: "tell them about Scout today" → that part gets today's date and is written the way they asked (e.g. highlight the feature, add a few small extras, invite the client to explore).
+- A later message changing the plan ("I already told them about the welcome page", "move the Scout update to Friday", "make it 4 parts") → plan_updates again with the full new list of what's still to send. It replaces the old plan.
+- "What should I send today?" → answer from PLANNED CLIENT UPDATES in <tasks>.
+- reply: one short line, e.g. "Planned 6 updates for Tomboy, the first one today about Scout." Plus the user's own to-dos if there were any.
+
 # Tagged tasks
 The user can tag a task with a short handle made from its name, e.g. "@tomboy sent the lookbook" for "Tomboy clothing website". Tags are listed after their message in <tagged_tasks> with the exact ref and full title (@tomboy = T1 ("Tomboy clothing website")).
 - A tag is definitive: the statement next to it is about that task. Never ask which task they meant, and never match that statement to a different task.
@@ -157,7 +169,8 @@ Return JSON matching the schema: reply, actions (an empty list when nothing shou
 - rename_task: task_ref; text = the new title.
 - set_cadence: task_ref; cadence_per_week (1–3, or null to remove the rhythm).
 - set_waiting: task_ref; text = what you're waiting for (a few words).
-- clear_waiting: task_ref.`;
+- clear_waiting: task_ref.
+- plan_updates: task_ref (or text = title for a new task); parts = the updates in order, each { title, text, send_on }.`;
 
 const nullableString = (description: string) => ({
   anyOf: [{ type: 'string' }, { type: 'null' }],
@@ -174,6 +187,7 @@ export const ACTION_TYPES = [
   'set_cadence',
   'set_waiting',
   'clear_waiting',
+  'plan_updates',
 ] as const;
 
 export type ActionType = (typeof ACTION_TYPES)[number];
@@ -189,6 +203,7 @@ export interface Action {
   cadence_per_week: number | null;
   start_date?: string | null;
   waiting_for?: string | null;
+  parts?: { title: string; text: string; send_on: string | null }[] | null;
 }
 
 export interface AssistantOutput {
@@ -223,7 +238,7 @@ export const RESPONSE_SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['type', 'task_ref', 'text', 'note', 'date', 'due_date', 'done', 'cadence_per_week', 'start_date', 'waiting_for'],
+        required: ['type', 'task_ref', 'text', 'note', 'date', 'due_date', 'done', 'cadence_per_week', 'start_date', 'waiting_for', 'parts'],
         properties: {
           type: { type: 'string', enum: [...ACTION_TYPES] },
           task_ref: nullableString('Ref of an existing task, e.g. "T3". Null for add_task.'),
@@ -232,6 +247,25 @@ export const RESPONSE_SCHEMA = {
           date: nullableString('YYYY-MM-DD when the log, note or completion happened. Null means today.'),
           start_date: nullableString('add_task only: YYYY-MM-DD the work was handed over, if the user says. Else null.'),
           waiting_for: nullableString('add_task only: what the new task is blocked on ("content from the client", "paused"). Else null.'),
+          parts: {
+            anyOf: [
+              {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  additionalProperties: false,
+                  required: ['title', 'text', 'send_on'],
+                  properties: {
+                    title: { type: 'string', description: '2–5 word label for this update.' },
+                    text: { type: 'string', description: 'The message to the client, ready to send.' },
+                    send_on: nullableString('YYYY-MM-DD only if the user said when; null to schedule it automatically.'),
+                  },
+                },
+              },
+              { type: 'null' },
+            ],
+            description: 'plan_updates only: the client updates, in the order to send them. Else null.',
+          },
           due_date: nullableString('add_task / set_due_date: YYYY-MM-DD, or null for no deadline.'),
           done: {
             anyOf: [{ type: 'boolean' }, { type: 'null' }],

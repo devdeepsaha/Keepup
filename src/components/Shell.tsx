@@ -86,6 +86,9 @@ export default function Shell({ user }: { user: User }) {
     purgeTask,
     addUpdate,
     deleteUpdate,
+    markPlannedSent,
+    movePlanned,
+    deletePlanned,
   } = useTasks(user.id, workspace);
   const prefs = usePrefs();
   const switchWorkspace = useCallback((w: WorkspaceId) => {
@@ -289,6 +292,9 @@ export default function Shell({ user }: { user: User }) {
             onArchive={(id) => archiveTask(id, true)}
             onAddUpdate={addUpdate}
             onDeleteUpdate={deleteUpdate}
+            onMarkPlannedSent={markPlannedSent}
+            onMovePlanned={movePlanned}
+            onDeletePlanned={deletePlanned}
           />
         ) : view === 'calendar' ? (
           <CalendarView key={`${workspace}-${calendarDay ?? 'today'}`} tasks={history} loading={loading} initialDay={calendarDay} onToggle={toggleTask} />
