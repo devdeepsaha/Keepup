@@ -48,11 +48,17 @@ export interface AiDraft {
 }
 
 // Log that the drafted message went out: counts as the task's check-in.
-export async function logDraftSent(draft: AiDraft) {
+// If a planned update is due for that client, this send is it: it's marked sent (one log, not two).
+export async function logDraftSent(draft: AiDraft, planned?: { id: string; taskId: string; title: string } | null) {
   if (!draft.taskId) return;
   const summary = draft.text.replace(/\s+/g, ' ').trim();
-  const text = `Sent client update: ${summary.length > 110 ? `${summary.slice(0, 107)}…` : summary}`;
-  check(await supabase.from('task_updates').insert({ task_id: draft.taskId, text }));
+  const short = summary.length > 150 ? `${summary.slice(0, 147)}…` : summary;
+  if (planned) {
+    check(await supabase.from('planned_updates').update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', planned.id));
+    check(await supabase.from('task_updates').insert({ task_id: planned.taskId, text: `Sent client update (${planned.title}): ${short}` }));
+    return;
+  }
+  check(await supabase.from('task_updates').insert({ task_id: draft.taskId, text: `Sent client update: ${short}` }));
 }
 
 // Server-side timing breakdown (ms) and which model answered.

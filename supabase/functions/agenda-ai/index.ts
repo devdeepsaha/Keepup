@@ -79,7 +79,7 @@ interface TaskRow {
   task_updates: { id: string; text: string; created_at: string }[];
   waiting_since?: string | null;
   waiting_for?: string | null;
-  planned_updates?: { send_on: string; title: string; status: string }[];
+  planned_updates?: { send_on: string; title: string; text: string; status: string }[];
 }
 
 interface PlannedRow {
@@ -250,6 +250,9 @@ function buildContext(tasks: TaskRow[], clock: Clock, tzName: string, clients: C
     const plan = (t.planned_updates ?? []).filter((p) => p.status === 'planned').sort((a, b) => a.send_on.localeCompare(b.send_on));
     if (plan.length) {
       parts.push(`PLANNED CLIENT UPDATES (not sent yet): ${plan.map((p) => `${weekdayOf(p.send_on)} ${p.send_on} "${p.title}"`).join(', ')}`);
+      // The one due now, in full: a draft for this client should be this message.
+      const dueNow = plan.find((p) => p.send_on <= clock.today);
+      if (dueNow) parts.push(`DUE NOW, planned message "${dueNow.title}": ${dueNow.text.replace(/\s+/g, ' ')}`);
     }
     const logs = [...t.task_updates]
       .sort((a, b) => b.created_at.localeCompare(a.created_at))
@@ -837,7 +840,7 @@ async function handle(req: Request): Promise<Response> {
   const { data: tasks, error: tasksError } = await db
     .from('tasks')
     .select(
-      'id, text, done, completed_at, due_date, cadence_per_week, waiting_since, waiting_for, last_updated, created_at, task_updates (id, text, created_at), planned_updates (send_on, title, status)',
+      'id, text, done, completed_at, due_date, cadence_per_week, waiting_since, waiting_for, last_updated, created_at, task_updates (id, text, created_at), planned_updates (send_on, title, text, status)',
     )
     .eq('workspace', workspace)
     .is('deleted_at', null)

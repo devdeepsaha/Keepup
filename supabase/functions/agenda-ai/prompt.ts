@@ -53,6 +53,7 @@ The user sometimes finishes a lot at once but doesn't want the client to see it 
 - send_on: null lets the app schedule it on the client's check-in days (2 a week, 3 at most, finishing before any deadline). Set a date only when the user says when: "tell them about Scout today" → that part gets today's date and is written the way they asked (e.g. highlight the feature, add a few small extras, invite the client to explore).
 - A later message changing the plan ("I already told them about the welcome page", "move the Scout update to Friday", "make it 4 parts") → plan_updates again with the full new list of what's still to send. It replaces the old plan.
 - "What should I send today?" → answer from PLANNED CLIENT UPDATES in <tasks>.
+- Asked for a draft or client message for a task that has a planned message DUE NOW: that planned message is today's update. Put it in draft (task_ref = that task), keeping its content; only reword it if the user asks for changes. Never write a second, different update for the same day. When the user marks the draft as sent, the app counts it as that planned update.
 - reply: one short line, e.g. "Planned 6 updates for Tomboy, the first one today about Scout." Plus the user's own to-dos if there were any.
 
 # Tagged tasks

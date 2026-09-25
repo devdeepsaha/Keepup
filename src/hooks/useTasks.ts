@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DEFAULT_CADENCE } from '../lib/cadence';
+import { dayKey } from '../lib/dates';
 import { supabase } from '../lib/supabase';
 import type { PlannedUpdate, Task, TaskUpdate, Workspace } from '../types';
 
@@ -221,11 +222,17 @@ export function useTasks(userId: string, workspace: Workspace) {
     (taskId: string, update: PlannedUpdate) => {
       const sentAt = new Date().toISOString();
       patchPlanned(taskId, update.id, (p) => ({ ...p, status: 'sent', sent_at: sentAt }));
-      const summary = update.text.replace(/\s+/g, ' ').trim();
-      addUpdate(taskId, `Sent client update (${update.title}): ${summary.length > 150 ? `${summary.slice(0, 147)}…` : summary}`);
+      // Already logged a client update today (e.g. from Bouncy's draft)? Then this is that one: no second log.
+      const today = dayKey(new Date());
+      const task = all.find((t) => t.id === taskId);
+      const loggedToday = task?.task_updates.some((u) => dayKey(u.created_at) === today && u.text.startsWith('Sent client update'));
+      if (!loggedToday) {
+        const summary = update.text.replace(/\s+/g, ' ').trim();
+        addUpdate(taskId, `Sent client update (${update.title}): ${summary.length > 150 ? `${summary.slice(0, 147)}…` : summary}`);
+      }
       return commit(supabase.from('planned_updates').update({ status: 'sent', sent_at: sentAt }).eq('id', update.id));
     },
-    [commit, patchPlanned, addUpdate],
+    [commit, patchPlanned, addUpdate, all],
   );
   const movePlanned = useCallback(
     (taskId: string, update: PlannedUpdate, sendOn: string) => {

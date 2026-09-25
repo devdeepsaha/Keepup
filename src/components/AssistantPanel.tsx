@@ -12,7 +12,7 @@ import {
 } from '../lib/ai';
 import { createChat, deleteChat, listChats, loadChat, saveMessages, type ChatSummary, type Entry } from '../lib/chats';
 import { dayKey } from '../lib/dates';
-import { clientTags, taskHandles } from '../lib/handles';
+import { clientKeyOf, clientTags, taskHandles } from '../lib/handles';
 import type { Task, Workspace } from '../types';
 import { LiveOrb } from './LiveOrb';
 import { useBouncyQuip } from '../lib/quips';
@@ -427,7 +427,21 @@ export default function AssistantPanel({ workspace, tasks, open, onOpenChange, o
 
   const markDraftSent = async (entryId: string, draft: AiDraft) => {
     try {
-      await logDraftSent(draft);
+      // A planned update due today for this client (this task first, then its other tasks) is what was just sent.
+      const today = dayKey(new Date());
+      const draftTask = tasks.find((t) => t.id === draft.taskId);
+      const candidates = draftTask ? [draftTask, ...tasks.filter((t) => t.id !== draftTask.id && clientKeyOf(t) === clientKeyOf(draftTask))] : [];
+      let planned: { id: string; taskId: string; title: string } | null = null;
+      for (const t of candidates) {
+        const due = (t.planned_updates ?? [])
+          .filter((p) => p.status === 'planned' && p.send_on <= today)
+          .sort((a, b) => a.send_on.localeCompare(b.send_on) || a.position - b.position)[0];
+        if (due) {
+          planned = { id: due.id, taskId: t.id, title: due.title };
+          break;
+        }
+      }
+      await logDraftSent(draft, planned);
       setDraftState(entryId, 'sent');
       onChanged();
     } catch (err) {
