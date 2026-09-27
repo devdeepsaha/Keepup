@@ -405,6 +405,11 @@ export function createLiveOrb(
 
   const tick = (now: number) => {
     if (!running) return
+    // Hidden (display: none, e.g. the corner orb on phones) or scrolled out of the page: skip the drawing.
+    if (!canvas.isConnected || canvas.offsetParent === null) {
+      raf = requestAnimationFrame(tick)
+      return
+    }
 
     const resolved = resolveVariant(
       options.variant,
@@ -508,6 +513,15 @@ export function createLiveOrb(
     raf = requestAnimationFrame(tick)
   }
 
+  // If the browser takes the context away anyway, stop cleanly and let the plain CSS orb show instead.
+  const onLost = (e: Event) => {
+    e.preventDefault()
+    running = false
+    cancelAnimationFrame(raf)
+    options.onHasGl?.(false)
+  }
+  canvas.addEventListener("webglcontextlost", onLost)
+
   raf = requestAnimationFrame(tick)
 
   return {
@@ -527,10 +541,14 @@ export function createLiveOrb(
       window.removeEventListener("pointerdown", onDown)
       window.removeEventListener("scroll", onScroll, { capture: true })
       options.onHasGl?.(false)
+      canvas.removeEventListener("webglcontextlost", onLost)
       gl.deleteProgram(program)
       gl.deleteShader(vs)
       gl.deleteShader(fs)
       gl.deleteBuffer(buf)
+      // Hand the WebGL context back now: browsers allow only ~16 at once, and every orb that came and went
+      // (switching space rebuilds Bouncy's panel) would otherwise keep one until the browser kills the oldest.
+      gl.getExtension("WEBGL_lose_context")?.loseContext()
     },
   }
 }
