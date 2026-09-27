@@ -48,11 +48,16 @@ export default function Workspace({ tasks, loading, focusTask, openId, onOpenIdC
 
   // A task whose panel is open keeps its section and position (the attention it had when opened),
   // so logging an update doesn't make it jump away mid-edit.
-  const [pin, setPin] = useState<{ id: string; attention: Attention | null } | null>(null);
-  if ((pin?.id ?? null) !== openId) {
-    // A different task was opened (or it closed): pin the new one where it is now.
-    const open = openId ? tasks.find((t) => t.id === openId) : undefined;
-    setPin(open ? { id: open.id, attention: attentionFor(open, now, todayKey, rhythmScopes(tasks).get(open.id)) } : null);
+  // `ready` is false while the opened task hasn't loaded yet (e.g. just switched space to open it).
+  const [pin, setPin] = useState<{ id: string | null; attention: Attention | null; ready: boolean }>({ id: null, attention: null, ready: true });
+  const openTask = openId ? tasks.find((t) => t.id === openId) : undefined;
+  if (pin.id !== openId || (!pin.ready && openTask)) {
+    // A different task was opened (or it closed, or it just loaded): pin it where it is now.
+    setPin({
+      id: openId,
+      attention: openTask ? attentionFor(openTask, now, todayKey, rhythmScopes(tasks).get(openTask.id)) : null,
+      ready: !openId || !!openTask,
+    });
   }
 
   // Press N anywhere to jump to the capture input.
@@ -82,7 +87,7 @@ export default function Workspace({ tasks, loading, focusTask, openId, onOpenIdC
   const scopes = rhythmScopes(tasks);
   const entries: Entry[] = tasks
     .filter((t) => !t.done)
-    .map((task) => ({ task, attention: task.id === pin?.id ? pin.attention : attentionFor(task, now, todayKey, scopes.get(task.id)) }));
+    .map((task) => ({ task, attention: task.id === pin.id && pin.ready ? pin.attention : attentionFor(task, now, todayKey, scopes.get(task.id)) }));
   const needsAttention = entries.filter((e) => e.attention).sort((a, b) => b.attention!.score - a.attention!.score);
   const inProgress = entries.filter((e) => !e.attention && !e.task.waiting_since).sort((a, b) => byDueThenOldest(a.task, b.task));
   // Blocked on the client, nothing due yet: parked here (they move to Needs attention on nudge days).
