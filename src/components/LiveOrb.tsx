@@ -652,7 +652,8 @@ export function LiveOrb({
           />
         </div>
       ) : null}
-      <canvas ref={canvasRef} className="absolute inset-0 size-full" />
+      {/* Only visible while WebGL works; otherwise the plain orb above shows (never Chrome's broken-canvas face). */}
+      <canvas ref={canvasRef} className={`absolute inset-0 size-full ${hasGl ? "" : "invisible"}`} />
     </div>
   )
 }
