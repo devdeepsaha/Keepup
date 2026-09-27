@@ -58,5 +58,5 @@ export function useOtherWorkspace(userId: string, current: Workspace) {
       .sort((a, b) => b.attention.score - a.attention.score);
   }, [tasks, now]);
 
-  return { other, items };
+  return { other, items, tasks };
 }

@@ -406,6 +406,8 @@ export default function Shell({ user }: { user: User }) {
         key={workspace}
         workspace={workspace}
         tasks={tasks}
+        otherTasks={otherWorkspace.tasks}
+        otherName={WORKSPACES[otherWorkspace.other].name}
         open={assistantOpen}
         onOpenChange={setAssistantOpen}
         onChanged={refetch}

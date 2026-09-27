@@ -1,4 +1,5 @@
 import type { View } from './Sidebar';
+import { LiveOrb } from './LiveOrb';
 
 // Phones: four quick destinations at the bottom of the screen, within thumb reach.
 
@@ -55,11 +56,9 @@ export default function MobileNav({ view, assistantOpen, attention, onNavigate, 
         aria-current={assistantOpen ? 'page' : undefined}
         className="flex flex-1 flex-col items-center justify-center gap-1 py-2 font-display text-[0.6875rem] cursor-pointer"
       >
-        <span className={`flex h-[26px] w-[26px] items-center justify-center rounded-full bg-accent-gradient shadow-md shadow-[#257ef4]/30 ${assistantOpen ? 'ring-2 ring-[var(--accent)] ring-offset-2 ring-offset-[var(--bg-color)]' : ''}`}>
-          <span className="flex gap-[5px]">
-            <span className="h-[7px] w-[3px] rounded-full bg-white" />
-            <span className="h-[7px] w-[3px] rounded-full bg-white" />
-          </span>
+        {/* The real Bouncy: its eyes look around, glance at taps, and blink */}
+        <span className={`flex rounded-full shadow-md shadow-[#257ef4]/30 ${assistantOpen ? 'ring-2 ring-[var(--accent)] ring-offset-2 ring-offset-[var(--bg-color)]' : ''}`}>
+          <LiveOrb size={28} variant="custom" color="#257EF4" eyeColor="#FAFAFA" />
         </span>
         <span className={assistantOpen ? 'text-[var(--accent)]' : 'text-[var(--text-muted)]'}>Bouncy</span>
       </button>

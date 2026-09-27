@@ -207,7 +207,16 @@ function scheduleParts(n: number, today: string, cadence: number | null, due: st
 
 type ClientInfo = { key: string; name: string; taskIds: string[] };
 
-function buildContext(tasks: TaskRow[], clock: Clock, tzName: string, clients: ClientInfo[] = [], workspace: WorkspaceId = 'agency') {
+const WORKSPACE_NAME: Record<WorkspaceId, string> = { agency: 'Mint-more', personal: 'Personal' };
+
+function buildContext(
+  tasks: TaskRow[],
+  clock: Clock,
+  tzName: string,
+  clients: ClientInfo[] = [],
+  workspace: WorkspaceId = 'agency',
+  otherTasks: TaskRow[] = [],
+) {
   const clientOf = new Map(clients.flatMap((c) => c.taskIds.map((id) => [id, c] as const)));
   const refs = new Map<string, TaskRow>();
   const { weekday, time, weekStart, weekEnd } = clock.describeNow();
@@ -277,6 +286,12 @@ function buildContext(tasks: TaskRow[], clock: Clock, tzName: string, clients: C
     recentDone.length ? recentDone.map(line).join('\n') : '(none)',
     '</tasks>',
   ];
+
+  // The other workspace's open tasks: available when the user tags or clearly means one.
+  const otherName = WORKSPACE_NAME[workspace === 'agency' ? 'personal' : 'agency'];
+  if (otherTasks.length) {
+    text.push(`<other_workspace name="${otherName}">`, otherTasks.map(line).join('\n'), '</other_workspace>');
+  }
 
   // Clients with several tasks: one check-in rhythm per client; a log on any of its tasks counts.
   if (clients.length) {
@@ -367,8 +382,8 @@ async function applyActions(db: SupabaseClient, actions: Action[], refs: Map<str
           due_date: dueDate,
           done,
           completed_at: done ? clock.toTimestamp(a.date) : null,
-          cadence_per_week: newTaskCadence(a.cadence_per_week, workspace),
-          workspace,
+          cadence_per_week: newTaskCadence(a.cadence_per_week, a.workspace === 'personal' || a.workspace === 'agency' ? a.workspace : workspace),
+          workspace: a.workspace === 'personal' || a.workspace === 'agency' ? a.workspace : workspace,
           ...(started ? { created_at: started, last_updated: started } : {}),
           ...(waitingFor ? { waiting_since: started ?? new Date().toISOString(), waiting_for: waitingFor } : {}),
         })
@@ -840,9 +855,8 @@ async function handle(req: Request): Promise<Response> {
   const { data: tasks, error: tasksError } = await db
     .from('tasks')
     .select(
-      'id, text, done, completed_at, due_date, cadence_per_week, waiting_since, waiting_for, last_updated, created_at, task_updates (id, text, created_at), planned_updates (send_on, title, text, status)',
+      'id, text, done, completed_at, due_date, cadence_per_week, waiting_since, waiting_for, workspace, last_updated, created_at, task_updates (id, text, created_at), planned_updates (send_on, title, text, status)',
     )
-    .eq('workspace', workspace)
     .is('deleted_at', null)
     .is('archived_at', null)
     .order('created_at', { ascending: true });
@@ -853,7 +867,11 @@ async function handle(req: Request): Promise<Response> {
     .filter((c) => c && typeof c.key === 'string' && typeof c.name === 'string' && Array.isArray(c.taskIds))
     .slice(0, 100)
     .map((c) => ({ key: clean(c.key, 40), name: clean(c.name, 60), taskIds: c.taskIds.filter((id) => typeof id === 'string') }));
-  const { refs, text: contextText } = buildContext(tasks as unknown as TaskRow[], clock, clean(body.tz?.name ?? 'UTC', 64), clientInfo, workspace);
+  // This workspace in full; the other one's open tasks too, so they can be tagged and updated from here.
+  const allTasks = (tasks ?? []) as unknown as (TaskRow & { workspace: WorkspaceId })[];
+  const here = allTasks.filter((t) => t.workspace === workspace);
+  const elsewhere = allTasks.filter((t) => t.workspace !== workspace && !t.done);
+  const { refs, text: contextText } = buildContext(here, clock, clean(body.tz?.name ?? 'UTC', 64), clientInfo, workspace, elsewhere);
 
   const history = (body.history ?? [])
     .slice(-MAX_HISTORY)

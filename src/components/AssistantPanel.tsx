@@ -104,13 +104,15 @@ function groupChats(chats: ChatSummary[]) {
 interface Props {
   workspace: Workspace; // chats and changes stay within this workspace
   tasks: Task[];
+  otherTasks?: Task[]; // the other workspace's open tasks: taggable too
+  otherName?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onChanged: () => void;
   prefill?: { text: string; nonce: number } | null; // start the input with this (e.g. "@tomboy ")
 }
 
-export default function AssistantPanel({ workspace, tasks, open, onOpenChange, onChanged, prefill }: Props) {
+export default function AssistantPanel({ workspace, tasks, otherTasks = [], otherName = '', open, onOpenChange, onChanged, prefill }: Props) {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [chatTitle, setChatTitle] = useState<string | null>(null);
   const [activeChatId, setActiveChatId] = useState<string | null>(null); // highlighted in History
@@ -310,13 +312,29 @@ export default function AssistantPanel({ workspace, tasks, open, onOpenChange, o
   // client with several tasks is itself @sonajhuri, standing for all of them.
   const handles = useMemo(() => taskHandles(tasks), [tasks]);
   const clients = useMemo(() => clientTags(tasks), [tasks]);
-  const handleList = useMemo(() => [...handles.values(), ...clients.keys()], [handles, clients]);
+  // The other workspace's tasks get their own tags; one that clashes with a tag here gets a number.
+  const otherHandles = useMemo(() => {
+    const taken = new Set([...handles.values(), ...clients.keys()]);
+    const out = new Map<string, string>();
+    for (const [id, h] of taskHandles(otherTasks)) {
+      let tag = h;
+      for (let n = 2; taken.has(tag); n++) tag = `${h}${n}`;
+      taken.add(tag);
+      out.set(id, tag);
+    }
+    return out;
+  }, [otherTasks, handles, clients]);
+  const handleList = useMemo(
+    () => [...handles.values(), ...clients.keys(), ...otherHandles.values()],
+    [handles, clients, otherHandles],
+  );
   const tagsIn = (value: string) => {
     const found = new Set([...value.toLowerCase().matchAll(/@([a-z0-9]+(?:\/[a-z0-9]+)?)/g)].map((m) => m[1]));
     const tagged: { id: string; handle: string }[] = [];
     for (const t of tasks) if (found.has(handles.get(t.id) ?? '')) tagged.push({ id: t.id, handle: handles.get(t.id)! });
     for (const [key, g] of clients)
       if (found.has(key)) for (const t of g.tasks) if (!tagged.some((x) => x.id === t.id)) tagged.push({ id: t.id, handle: key });
+    for (const t of otherTasks) if (found.has(otherHandles.get(t.id) ?? '')) tagged.push({ id: t.id, handle: otherHandles.get(t.id)! });
     return tagged;
   };
 
@@ -331,6 +349,9 @@ export default function AssistantPanel({ workspace, tasks, open, onOpenChange, o
         ...tasks
           .filter((t) => !t.done && ((handles.get(t.id) ?? '').includes(q) || t.text.toLowerCase().includes(q)))
           .map((t) => ({ tag: handles.get(t.id) ?? '', label: t.text, detail: '' })),
+        ...otherTasks
+          .filter((t) => (otherHandles.get(t.id) ?? '').includes(q) || t.text.toLowerCase().includes(q))
+          .map((t) => ({ tag: otherHandles.get(t.id) ?? '', label: t.text, detail: otherName })),
       ]
         .sort((a, b) => Number(b.tag.startsWith(q)) - Number(a.tag.startsWith(q)))
         .slice(0, 7)
