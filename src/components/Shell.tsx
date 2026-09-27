@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { useTasks } from '../hooks/useTasks';
-import { taskHandles } from '../lib/handles';
+import { rhythmScopes, taskHandles } from '../lib/handles';
+import { attentionFor, useNow } from '../lib/tasks';
+import { dayKey } from '../lib/dates';
 import { ClientColorsProvider } from '../lib/clientColors';
 import { usePrefs, type Density, type Theme } from '../lib/prefs';
 import { supabase } from '../lib/supabase';
@@ -21,6 +23,7 @@ import Sidebar, {
   type View,
 } from './Sidebar';
 import Workspace from './Workspace';
+import MobileNav from './MobileNav';
 
 const SIDEBAR_KEY = 'agenda.sidebarCollapsed';
 const ASSISTANT_KEY = 'agenda.assistantOpen';
@@ -231,6 +234,13 @@ export default function Shell({ user }: { user: User }) {
   }, [prefs.theme, prefs.density, workspace, width, resizing]);
 
   const handles = useMemo(() => taskHandles(tasks), [tasks]);
+  // For the phone nav badge: how many tasks need attention right now.
+  const now = useNow();
+  const attentionCount = useMemo(() => {
+    const todayKey = dayKey(new Date(now));
+    const scopes = rhythmScopes(tasks);
+    return tasks.filter((t) => !t.done && attentionFor(t, now, todayKey, scopes.get(t.id))).length;
+  }, [tasks, now]);
   const sidebarWidth = collapsed ? SIDEBAR_ICON_WIDTH : width;
 
   return (
@@ -271,7 +281,7 @@ export default function Shell({ user }: { user: User }) {
 
       {/* On small screens the expanded sidebar overlays content instead of pushing it. */}
       <div
-        className={`min-h-screen md:pl-[var(--sb)] pb-10 ${resizing ? '' : 'transition-[padding] duration-200 ease-linear'} ${
+        className={`min-h-screen md:pl-[var(--sb)] pb-24 md:pb-10 ${resizing ? '' : 'transition-[padding] duration-200 ease-linear'} ${
           assistantOpen ? 'lg:pr-[380px]' : ''
         }`}
       >
@@ -324,6 +334,7 @@ export default function Shell({ user }: { user: User }) {
             onSetWaiting={setWaiting}
             onDelete={deleteTask}
             onArchive={(id) => archiveTask(id, true)}
+            onAskAbout={askAbout}
             onAddUpdate={addUpdate}
             onDeleteUpdate={deleteUpdate}
             onMarkPlannedSent={markPlannedSent}
@@ -347,6 +358,17 @@ export default function Shell({ user }: { user: User }) {
           />
         )}
       </div>
+
+      <MobileNav
+        view={view}
+        assistantOpen={assistantOpen}
+        attention={attentionCount}
+        onNavigate={(v) => {
+          setAssistantOpen(false);
+          navigate(v);
+        }}
+        onOpenAssistant={() => setAssistantOpen(!assistantOpen)}
+      />
 
       <AssistantPanel
         key={workspace}

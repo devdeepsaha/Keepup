@@ -21,6 +21,7 @@ interface Props {
   onSetWaiting: (id: string, waitingFor: string | null, waiting: boolean, since?: string | null) => void;
   onDelete: (id: string) => void;
   onArchive: (id: string) => void;
+  onAskAbout?: (handle: string) => void;
   onAddUpdate: (id: string, text: string) => void;
   onDeleteUpdate: (taskId: string, updateId: string) => void;
   onMarkPlannedSent: (taskId: string, update: PlannedUpdate) => void;

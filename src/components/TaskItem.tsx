@@ -6,6 +6,8 @@ import { CADENCE_OPTIONS, CADENCE_RULE, cadenceFor, cadenceName } from '../lib/c
 import { cleanHandle, clientKeyOf, type RhythmScope } from '../lib/handles';
 import TimerRing from './TimerRing';
 import PlannedUpdates from './PlannedUpdates';
+import ActionSheet, { SHEET_ICONS } from './ActionSheet';
+import { useLongPress } from '../lib/useLongPress';
 
 const STRIKE_MS = 650; // circle fills + line draws through the title
 const LEAVE_MS = 450; // row folds away, then the task moves lists
@@ -29,6 +31,7 @@ interface Props {
   onSetWaiting: (id: string, waitingFor: string | null, waiting: boolean, since?: string | null) => void;
   onDelete: (id: string) => void; // moves it to the trash (restorable for 30 days)
   onArchive: (id: string) => void;
+  onAskAbout?: (handle: string) => void;
   onAddUpdate: (id: string, text: string) => void;
   onDeleteUpdate: (taskId: string, updateId: string) => void;
   onMarkPlannedSent: (taskId: string, update: PlannedUpdate) => void;
@@ -57,6 +60,7 @@ export default function TaskItem({
   onSetWaiting,
   onDelete,
   onArchive,
+  onAskAbout,
   onAddUpdate,
   onDeleteUpdate,
   onMarkPlannedSent,
@@ -68,6 +72,8 @@ export default function TaskItem({
   const [draftTitle, setDraftTitle] = useState(task.text);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showSettings, setShowSettings] = useState(false); // due date / repeat / delete, folded away
+  const [sheet, setSheet] = useState(false); // phones: tap-and-hold menu
+  const hold = useLongPress(() => phase === 'idle' && !isEditing && setSheet(true));
   const [phase, setPhase] = useState<'idle' | 'striking' | 'leaving'>('idle');
   const titleInput = useRef<HTMLInputElement>(null);
   const updateInput = useRef<HTMLInputElement>(null);
@@ -176,13 +182,30 @@ export default function TaskItem({
     ].filter((x): x is string => !!x),
   };
 
+  const sheetActions = [
+    { label: waiting ? 'Log a nudge' : 'Log an update', icon: SHEET_ICONS.log, onSelect: openForLogging },
+    { label: done ? 'Mark as not done' : 'Mark as done', icon: SHEET_ICONS.done, onSelect: handleToggle },
+    {
+      label: 'Edit: due date, rhythm, client',
+      icon: SHEET_ICONS.edit,
+      onSelect: () => {
+        setOpen(true);
+        setShowSettings(true);
+      },
+    },
+    ...(onAskAbout ? [{ label: 'Ask Bouncy about it', icon: SHEET_ICONS.ask, onSelect: () => onAskAbout(handle) }] : []),
+    { label: 'Archive', icon: SHEET_ICONS.archive, onSelect: () => onArchive(task.id) },
+    { label: 'Move to trash', icon: SHEET_ICONS.trash, onSelect: () => onDelete(task.id), danger: true },
+  ];
+
   return (
     <div ref={root} className={`row-collapse ${phase === 'leaving' ? 'is-leaving' : ''}`}>
       <div className="overflow-hidden">
         <div className="border-b border-[var(--line-color)] group">
           {/* Task header: one compact line (title + status chips) */}
           <div
-            className="@container py-3 flex items-start @2xl:items-center gap-3 cursor-pointer"
+            {...hold}
+            className="no-callout @container py-3 flex items-start @2xl:items-center gap-3 cursor-pointer"
             onClick={() => !isEditing && phase === 'idle' && setOpen(!isOpen)}
           >
             <button
@@ -544,6 +567,7 @@ export default function TaskItem({
           </div>
         </div>
       </div>
+    {sheet && <ActionSheet title={task.text} subtitle={`@${handle}`} actions={sheetActions} onClose={() => setSheet(false)} />}
     </div>
   );
 }

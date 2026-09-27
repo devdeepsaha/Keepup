@@ -6,6 +6,7 @@ import { clientKeyOf, groupClients, monograms, rhythmScopes } from '../lib/handl
 import { addDays, dayKey, startOfWeek } from '../lib/dates';
 import { ColorSwatches, useClientColors } from '../lib/clientColors';
 import Logo from './Logo';
+import { useLongPress } from '../lib/useLongPress';
 import type { Density, Theme } from '../lib/prefs';
 import type { Task, Workspace } from '../types';
 
@@ -164,6 +165,20 @@ export default function Sidebar({
     setConfirmDelete(null);
   });
   const userMenuRef = useOutsideClose(userMenu, () => setUserMenu(false));
+  // Phones: tap and hold a row to open its menu where the finger is.
+  const heldRow = useRef<{ kind: 'task' | 'client'; id: string } | null>(null);
+  const press = useLongPress((x, y) => {
+    if (!heldRow.current) return;
+    setClientMenu({ ...heldRow.current, top: Math.min(y, window.innerHeight - 320), left: Math.max(8, Math.min(x, window.innerWidth - 240)) });
+    setConfirmDelete(null);
+  });
+  const holdProps = (kind: 'task' | 'client', id: string) => ({
+    ...press,
+    onPointerDown: (e: React.PointerEvent) => {
+      heldRow.current = { kind, id };
+      press.onPointerDown(e);
+    },
+  });
 
   // Clients (tasks grouped by client), most urgent first, each with the ring colour of its most urgent task.
   const scopes = rhythmScopes(tasks);
@@ -246,7 +261,7 @@ export default function Sidebar({
   const clientsLabel = workspace === 'agency' ? 'Work' : 'Projects';
 
   const itemBase =
-    'group/item relative flex w-full items-center gap-2.5 rounded-lg px-2.5 h-9 text-sm transition-colors cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[#257EF4]';
+    'no-callout group/item relative flex w-full items-center gap-2.5 rounded-lg px-2.5 h-9 text-sm transition-colors cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[#257EF4]';
   const groupLabel = (text: string) =>
     collapsed ? (
       <div className="mx-auto my-2 h-px w-6 bg-[var(--line-color)]" />
@@ -279,6 +294,7 @@ export default function Sidebar({
         <div key={group.key}>
           <div className="group/client relative">
             <button
+              {...holdProps('client', group.key)}
               onClick={() =>
                 setOpenClients((prev) => {
                   const next = new Set(prev);
@@ -398,6 +414,7 @@ export default function Sidebar({
     return (
       <div key={menuId} className="group/client relative">
         <button
+          {...holdProps('task', menuId)}
           onClick={() => onOpenTask(task.id)}
           aria-pressed={openTaskId === task.id}
           className={`${itemBase} ${collapsed ? 'justify-center px-0' : 'pr-8'} ${nested ? 'h-8 text-[0.8125rem]' : ''} ${

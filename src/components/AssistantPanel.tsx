@@ -537,7 +537,7 @@ export default function AssistantPanel({ workspace, tasks, open, onOpenChange, o
         onMouseLeave={() => setDancing(null)}
         aria-label="Open Bouncy"
         title="Bouncy (press /)"
-        className="fixed top-1.5 right-3 z-30 rounded-full shadow-md shadow-[#257EF4]/30 transition-transform hover:scale-105 cursor-pointer"
+        className="fixed top-1.5 right-3 z-30 rounded-full max-md:hidden shadow-md shadow-[#257EF4]/30 transition-transform hover:scale-105 cursor-pointer"
       >
         <LiveOrb size={36} variant="custom" color="#257EF4" eyeColor="#FAFAFA" dance={dancing === 'launcher'} />
       </button>

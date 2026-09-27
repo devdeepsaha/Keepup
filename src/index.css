@@ -146,6 +146,19 @@ body {
   to { opacity: 1; transform: none; }
 }
 
+/* Tap-and-hold rows: no iOS copy/select callout */
+.no-callout {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Bottom action sheet */
+.sheet-backdrop { animation: sheet-fade 0.2s ease; }
+.sheet-panel { animation: sheet-up 0.28s cubic-bezier(0.16, 1, 0.3, 1); }
+@keyframes sheet-fade { from { opacity: 0; } }
+@keyframes sheet-up { from { transform: translateY(100%); } }
+
 /* Blue gradient helpers */
 .bg-accent-gradient {
   background-image: var(--accent-gradient);
