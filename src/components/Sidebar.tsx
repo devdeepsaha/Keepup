@@ -45,7 +45,6 @@ interface Props {
   onAskAbout: (handle: string) => void;
   onDeleteTask: (id: string) => void;
   onArchiveTask: (id: string) => void;
-  onOpenAssistant: () => void;
   workspace: Workspace;
   onSwitchWorkspace: (w: Workspace) => void;
   otherAttention: number; // tasks needing attention in the other workspace
@@ -69,7 +68,6 @@ const DOTS = 'M5 12h.01M12 12h.01M19 12h.01';
 const UPDOWN = 'M8 9l4-4 4 4M16 15l-4 4-4-4';
 const LOGOUT = 'M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 17l-5-5 5-5M5 12h11';
 const SPARK = 'M12 3l1.8 4.9L19 9.7l-4.9 1.8L12 16.4l-1.8-4.9L5 9.7l5.2-1.8zM19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z';
-const PANEL = 'M4 5h16v14H4zM9.5 5v14';
 const OPEN = 'M14 4h6v6M20 4l-8 8M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5';
 const TRASH = 'M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4h6v3';
 const CHART = 'M4 20V10M10 20V4M16 20v-7M22 20H2';
@@ -139,7 +137,6 @@ export default function Sidebar({
   onAskAbout,
   onDeleteTask,
   onArchiveTask,
-  onOpenAssistant,
   workspace,
   onSwitchWorkspace,
   otherAttention,
@@ -152,6 +149,45 @@ export default function Sidebar({
 }: Props) {
   const { colorOf } = useClientColors();
   const [switcher, setSwitcher] = useState(false);
+  // Hold the switcher, drag onto a workspace, let go: switched. (A tap still just opens the menu.)
+  const [dragHover, setDragHover] = useState<Workspace | null>(null);
+  const holdTimer = useRef<number | undefined>(undefined);
+  const heldOpen = useRef(false);
+  const startSwitcherHold = (e: React.PointerEvent) => {
+    if (e.button !== 0) return;
+    heldOpen.current = false;
+    window.clearTimeout(holdTimer.current);
+    holdTimer.current = window.setTimeout(() => {
+      heldOpen.current = true;
+      navigator.vibrate?.(12);
+      setSwitcher(true);
+      setDragHover(null);
+      let last: Workspace | null = null;
+      const move = (ev: PointerEvent) => {
+        const el = document.elementFromPoint(ev.clientX, ev.clientY)?.closest<HTMLElement>('[data-ws]');
+        const ws = (el?.dataset.ws as Workspace | undefined) ?? null;
+        if (ws !== last) {
+          last = ws;
+          if (ws) navigator.vibrate?.(6);
+          setDragHover(ws);
+        }
+      };
+      const up = () => {
+        window.removeEventListener('pointermove', move);
+        window.removeEventListener('pointerup', up);
+        window.removeEventListener('pointercancel', up);
+        setDragHover(null);
+        if (last) {
+          setSwitcher(false);
+          if (last !== workspace) onSwitchWorkspace(last);
+        } // let go elsewhere: the menu stays open, as after a tap
+      };
+      window.addEventListener('pointermove', move);
+      window.addEventListener('pointerup', up);
+      window.addEventListener('pointercancel', up);
+    }, 350);
+  };
+  const cancelSwitcherHold = () => window.clearTimeout(holdTimer.current);
   const switcherRef = useOutsideClose(switcher, () => setSwitcher(false));
   const now = useNow();
   const todayKey = dayKey(new Date(now));
@@ -167,6 +203,7 @@ export default function Sidebar({
     setConfirmDelete(null);
   });
   const userMenuRef = useOutsideClose(userMenu, () => setUserMenu(false));
+  const userMenuTimer = useRef<number | undefined>(undefined);
   // Phones: tap and hold a row to open its menu where the finger is.
   const heldRow = useRef<{ kind: 'task' | 'client'; id: string } | null>(null);
   const press = useLongPress((x, y) => {
@@ -503,7 +540,17 @@ export default function Sidebar({
       {/* Header: workspace switcher, as in sidebar-07's team switcher */}
       <div className="relative flex items-center gap-1 p-2" ref={switcherRef}>
         <button
-          onClick={() => setSwitcher((v) => !v)}
+          onPointerDown={startSwitcherHold}
+          onPointerUp={cancelSwitcherHold}
+          onPointerLeave={cancelSwitcherHold}
+          onContextMenu={(e) => e.preventDefault()}
+          onClick={() => {
+            if (heldOpen.current) {
+              heldOpen.current = false; // the hold already opened it
+              return;
+            }
+            setSwitcher((v) => !v);
+          }}
           onDoubleClick={() => {
             // Double-click: jump straight to the other workspace.
             setSwitcher(false);
@@ -554,11 +601,14 @@ export default function Sidebar({
             {(Object.keys(WORKSPACES) as Workspace[]).map((w, i) => (
               <button
                 key={w}
+                data-ws={w}
                 onClick={() => {
                   setSwitcher(false);
                   if (w !== workspace) onSwitchWorkspace(w);
                 }}
-                className="flex w-full items-center gap-2.5 px-3 py-2 hover:bg-[var(--bg-color)] cursor-pointer"
+                className={`flex w-full items-center gap-2.5 px-3 py-2.5 hover:bg-[var(--bg-color)] cursor-pointer ${
+                  dragHover === w ? 'bg-[var(--accent-soft)] text-[var(--accent)]' : ''
+                }`}
               >
                 <span
                   className="flex h-6 w-6 items-center justify-center rounded-md border border-[var(--line-color)] font-display text-[0.6875rem] font-semibold"
@@ -667,8 +717,20 @@ export default function Sidebar({
         )}
       </div>
 
-      {/* User menu */}
-      <div className="relative p-2" ref={userMenuRef}>
+      {/* User menu: opens on mouse hover (or a tap) */}
+      <div
+        className="relative p-2"
+        ref={userMenuRef}
+        onPointerEnter={(e) => {
+          if (e.pointerType !== 'mouse') return;
+          window.clearTimeout(userMenuTimer.current);
+          setUserMenu(true);
+        }}
+        onPointerLeave={(e) => {
+          if (e.pointerType !== 'mouse') return;
+          userMenuTimer.current = window.setTimeout(() => setUserMenu(false), 250);
+        }}
+      >
         <button
           onClick={() => setUserMenu((v) => !v)}
           aria-expanded={userMenu}
@@ -703,27 +765,6 @@ export default function Sidebar({
                 <span className="truncate text-xs text-[var(--text-muted)]">{email}</span>
               </span>
             </div>
-            <div className="my-1 h-px bg-[var(--line-color)]" />
-            <button
-              onClick={() => {
-                setUserMenu(false);
-                onOpenAssistant();
-              }}
-              className="flex w-full items-center gap-2.5 px-3 py-2 hover:bg-[var(--bg-color)] cursor-pointer"
-            >
-              <Icon d={SPARK} className="w-4 h-4" /> <span className="flex-1 text-left">Open Bouncy</span>
-              <kbd className="text-[0.6875rem] text-[var(--text-muted)]">/</kbd>
-            </button>
-            <button
-              onClick={() => {
-                setUserMenu(false);
-                onToggleCollapsed();
-              }}
-              className="flex w-full items-center gap-2.5 px-3 py-2 hover:bg-[var(--bg-color)] cursor-pointer"
-            >
-              <Icon d={PANEL} className="w-4 h-4" /> <span className="flex-1 text-left">{collapsed ? 'Expand sidebar' : 'Collapse sidebar'}</span>
-              <kbd className="text-[0.6875rem] text-[var(--text-muted)]">Ctrl B</kbd>
-            </button>
             <div className="my-1 h-px bg-[var(--line-color)]" />
             {segmented<Theme>('Theme', theme, onSetTheme, [
               ['light', 'Light'],

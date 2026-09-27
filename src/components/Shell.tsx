@@ -288,7 +288,6 @@ export default function Shell({ user }: { user: User }) {
         onAskAbout={askAbout}
         onDeleteTask={deleteTask}
         onArchiveTask={(id) => archiveTask(id, true)}
-        onOpenAssistant={() => setAssistantOpen(true)}
         workspace={workspace}
         onSwitchWorkspace={switchWorkspace}
         otherAttention={otherWorkspace.items.length}
