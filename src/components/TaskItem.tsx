@@ -8,6 +8,7 @@ import TimerRing from './TimerRing';
 import PlannedUpdates from './PlannedUpdates';
 import ActionSheet, { SHEET_ICONS } from './ActionSheet';
 import { useLongPress } from '../lib/useLongPress';
+import { useBackClose } from '../lib/backStack';
 
 const STRIKE_MS = 650; // circle fills + line draws through the title
 const LEAVE_MS = 450; // row folds away, then the task moves lists
@@ -74,6 +75,7 @@ export default function TaskItem({
   const [showSettings, setShowSettings] = useState(false); // due date / repeat / delete, folded away
   const [sheet, setSheet] = useState(false); // phones: tap-and-hold menu
   const hold = useLongPress(() => phase === 'idle' && !isEditing && setSheet(true));
+  useBackClose(sheet, () => setSheet(false));
   const [phase, setPhase] = useState<'idle' | 'striking' | 'leaving'>('idle');
   const titleInput = useRef<HTMLInputElement>(null);
   const updateInput = useRef<HTMLInputElement>(null);

@@ -24,6 +24,7 @@ import Sidebar, {
 } from './Sidebar';
 import Workspace from './Workspace';
 import MobileNav from './MobileNav';
+import { onPageChangeBack, pushPage, replacePage, useBackClose } from '../lib/backStack';
 
 const SIDEBAR_KEY = 'agenda.sidebarCollapsed';
 const ASSISTANT_KEY = 'agenda.assistantOpen';
@@ -179,6 +180,7 @@ export default function Shell({ user }: { user: User }) {
 
   const navigate = (v: View, opts: { day?: string; section?: Section; keepOpen?: boolean } = {}) => {
     if (!opts.keepOpen) closeDrawerOnPhone();
+    if (v !== view) pushPage({ view: v, day: opts.day ?? null }); // back returns to the page before
     setView(v);
     setCalendarDay(opts.day);
     if (opts.section) {
@@ -195,6 +197,21 @@ export default function Shell({ user }: { user: User }) {
     setOpenTaskId(id);
     setFocusTask({ id, nonce: Date.now() });
   };
+
+  // Back button: pages step back through history; open layers close first (see backStack).
+  useEffect(() => {
+    replacePage({ view: 'workspace', day: null });
+    onPageChangeBack((state) => {
+      const s = (state ?? {}) as { view?: View; day?: string | null };
+      setView(s.view ?? 'workspace');
+      setCalendarDay(s.day ?? undefined);
+      window.scrollTo({ top: 0 });
+    });
+    return () => onPageChangeBack(null);
+  }, []);
+  useBackClose(assistantOpen, () => setAssistantOpen(false));
+  useBackClose(!collapsed && typeof window !== 'undefined' && window.innerWidth < 768, () => setCollapsedSaved(true));
+  useBackClose(openTaskId !== null && view === 'workspace', () => setOpenTaskId(null));
 
   const askAbout = (handle: string) => {
     setAssistantOpen(true);
