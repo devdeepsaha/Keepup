@@ -144,3 +144,16 @@ export function taskHandles(tasks: Task[]): Map<string, string> {
 export function clientTags(tasks: Task[]): Map<string, ClientGroup> {
   return new Map([...groupClients(tasks)].filter(([, g]) => g.tasks.length > 1));
 }
+
+// Shortest unique initials per client: "T" for Tomboy, but "TO" and "TA" once Tamarind joins.
+export function monograms(entries: [key: string, name: string][]) {
+  const letters = (name: string) => name.replace(/[^a-z0-9]/gi, '').toUpperCase() || '?';
+  const out = new Map<string, string>();
+  for (const [key, name] of entries) {
+    const l = letters(name);
+    let n = 1;
+    while (n < Math.min(3, l.length) && entries.some(([k, other]) => k !== key && letters(other).startsWith(l.slice(0, n)))) n++;
+    out.set(key, l.slice(0, n));
+  }
+  return out;
+}

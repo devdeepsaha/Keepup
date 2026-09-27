@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { attentionFor, timerFor, useNow, type Timer } from '../lib/tasks';
-import { clientKeyOf, groupClients, rhythmScopes } from '../lib/handles';
+import { clientKeyOf, groupClients, monograms, rhythmScopes } from '../lib/handles';
 import { addDays, dayKey, startOfWeek } from '../lib/dates';
 import { ColorSwatches, useClientColors } from '../lib/clientColors';
 import Logo from './Logo';
@@ -93,19 +93,6 @@ function ClientTile({ color, tone, label }: { color: string; tone: Timer['tone']
       {label}
     </span>
   );
-}
-
-// Shortest unique initials per client: "T" for Tomboy, but "TO" and "TA" once Tamarind joins.
-function monograms(entries: [key: string, name: string][]) {
-  const letters = (name: string) => name.replace(/[^a-z0-9]/gi, '').toUpperCase() || '?';
-  const out = new Map<string, string>();
-  for (const [key, name] of entries) {
-    const l = letters(name);
-    let n = 1;
-    while (n < Math.min(3, l.length) && entries.some(([k, other]) => k !== key && letters(other).startsWith(l.slice(0, n)))) n++;
-    out.set(key, l.slice(0, n));
-  }
-  return out;
 }
 
 // Closes a popover when clicking anywhere outside it.
