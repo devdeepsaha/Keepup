@@ -277,7 +277,7 @@ export default function Shell({ user }: { user: User }) {
       >
         {/* Page header: sidebar toggle + breadcrumb */}
         {/* Pinned on every page: sidebar toggle + where you are */}
-        <header className="sticky top-0 z-20 flex h-12 items-center gap-2 bg-[var(--bg-color)]/95 px-3 pr-16 backdrop-blur md:px-4">
+        <header className="sticky top-0 z-[15] flex h-12 items-center gap-2 bg-[var(--bg-color)]/95 px-3 pr-16 backdrop-blur md:px-4">
           <button
             onClick={toggleCollapsed}
             aria-label="Toggle sidebar"
