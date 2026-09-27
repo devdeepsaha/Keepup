@@ -159,6 +159,18 @@ body {
 @keyframes sheet-fade { from { opacity: 0; } }
 @keyframes sheet-up { from { transform: translateY(100%); } }
 
+/* The installed app on Android: no pull-to-refresh when dragging down from the top */
+html,
+body {
+  overscroll-behavior-y: none;
+}
+
+/* Space switcher: the name slides in from the side you swiped towards */
+.space-slide-next { animation: space-in-right 0.28s cubic-bezier(0.16, 1, 0.3, 1); }
+.space-slide-prev { animation: space-in-left 0.28s cubic-bezier(0.16, 1, 0.3, 1); }
+@keyframes space-in-right { from { opacity: 0; transform: translateX(40%); } }
+@keyframes space-in-left { from { opacity: 0; transform: translateX(-40%); } }
+
 /* Blue gradient helpers */
 .bg-accent-gradient {
   background-image: var(--accent-gradient);

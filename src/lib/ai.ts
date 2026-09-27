@@ -88,7 +88,8 @@ export async function askAssistant(
   history: HistoryTurn[],
   mentions: { id: string; handle: string }[] = [], // tasks tagged with @handle
   clients: { key: string; name: string; taskIds: string[] }[] = [], // clients with several tasks
-  workspace: 'agency' | 'personal' = 'agency',
+  workspace = 'agency',
+  spaces: { key: string; name: string; kind: 'work' | 'personal' }[] = [],
 ): Promise<AiResponse> {
   const { data, error } = await supabase.functions.invoke<AiResponse>('agenda-ai', {
     body: {
@@ -98,6 +99,7 @@ export async function askAssistant(
       mentions,
       clients,
       workspace,
+      spaces: spaces.map(({ key, name, kind }) => ({ key, name, kind })),
       tz: { name: Intl.DateTimeFormat().resolvedOptions().timeZone, offsetMinutes: new Date().getTimezoneOffset() },
     },
   });

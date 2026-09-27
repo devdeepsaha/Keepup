@@ -62,10 +62,21 @@ interface RequestBody {
   mentions?: { id: string; handle: string }[]; // tasks the user tagged with @handle
   clients?: { key: string; name: string; taskIds: string[] }[]; // clients with several active tasks
   tz: { name: string; offsetMinutes: number }; // offsetMinutes = Date#getTimezoneOffset()
-  workspace?: 'agency' | 'personal'; // the assistant only sees and changes this workspace's tasks
+  workspace?: string; // the space the user is in
+  spaces?: { key: string; name: string; kind: 'work' | 'personal' }[]; // all of the user's spaces
 }
 
-type WorkspaceId = 'agency' | 'personal';
+type WorkspaceId = string;
+interface SpaceInfo {
+  key: string;
+  name: string;
+  kind: 'work' | 'personal'; // work: clients and rhythms; personal: a plain to-do list
+}
+const BUILTIN_SPACES: SpaceInfo[] = [
+  { key: 'agency', name: 'Mint-more', kind: 'work' },
+  { key: 'personal', name: 'Personal', kind: 'personal' },
+];
+const SPACE_KEY = /^[a-z0-9][a-z0-9-]{1,29}$/;
 
 interface TaskRow {
   id: string;
@@ -144,8 +155,8 @@ const isDateKey = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(
 const DEFAULT_CADENCE = 2; // every task gets a twice-a-week rhythm unless told otherwise
 const validCadence = (n: number | null) => (n === 1 || n === 2 || n === 3 ? n : null);
 // add_task: 0 means no rhythm (paused / on hold); null means the workspace default.
-const newTaskCadence = (n: number | null, workspace: 'agency' | 'personal') =>
-  n === 0 ? null : (validCadence(n) ?? (workspace === 'agency' ? DEFAULT_CADENCE : null));
+const newTaskCadence = (n: number | null, kind: SpaceInfo['kind']) =>
+  n === 0 ? null : (validCadence(n) ?? (kind === 'work' ? DEFAULT_CADENCE : null));
 const clean = (s: string | null, max: number) => (s ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
 
 // ---------- pacing planned client updates ----------
@@ -207,15 +218,14 @@ function scheduleParts(n: number, today: string, cadence: number | null, due: st
 
 type ClientInfo = { key: string; name: string; taskIds: string[] };
 
-const WORKSPACE_NAME: Record<WorkspaceId, string> = { agency: 'Mint-more', personal: 'Personal' };
-
 function buildContext(
   tasks: TaskRow[],
   clock: Clock,
   tzName: string,
   clients: ClientInfo[] = [],
-  workspace: WorkspaceId = 'agency',
-  otherTasks: TaskRow[] = [],
+  current: SpaceInfo = BUILTIN_SPACES[0],
+  otherTasks: (TaskRow & { workspace: string })[] = [],
+  spaces: SpaceInfo[] = BUILTIN_SPACES,
 ) {
   const clientOf = new Map(clients.flatMap((c) => c.taskIds.map((id) => [id, c] as const)));
   const refs = new Map<string, TaskRow>();
@@ -274,9 +284,10 @@ function buildContext(
     '<context>',
     `Today: ${weekday} ${clock.today}, ${time} local time (${tzName}).`,
     `This week: Monday ${weekStart} to Sunday ${weekEnd}.`,
-    workspace === 'personal'
-      ? "Workspace: Personal (the user's own tasks, not client work; new tasks get no rhythm unless asked; there are no client updates to draft unless the user asks)."
-      : 'Workspace: Mint-more (agency client work).',
+    current.kind === 'personal'
+      ? `Space: ${current.name} (the user's own tasks, not client work; new tasks get no rhythm unless asked; there are no client updates to draft unless the user asks).`
+      : `Space: ${current.name} (client work).`,
+    `All spaces: ${spaces.map((s) => `${s.name} (key "${s.key}", ${s.kind === 'work' ? 'client work' : 'personal'})`).join('; ')}.`,
     '</context>',
     '<tasks>',
     'Active:',
@@ -287,10 +298,11 @@ function buildContext(
     '</tasks>',
   ];
 
-  // The other workspace's open tasks: available when the user tags or clearly means one.
-  const otherName = WORKSPACE_NAME[workspace === 'agency' ? 'personal' : 'agency'];
-  if (otherTasks.length) {
-    text.push(`<other_workspace name="${otherName}">`, otherTasks.map(line).join('\n'), '</other_workspace>');
+  // Other spaces' open tasks: available when the user tags or clearly means one.
+  for (const sp of spaces) {
+    if (sp.key === current.key) continue;
+    const list = otherTasks.filter((t) => t.workspace === sp.key);
+    if (list.length) text.push(`<other_space name="${sp.name}" key="${sp.key}">`, list.map(line).join('\n'), '</other_space>');
   }
 
   // Clients with several tasks: one check-in rhythm per client; a log on any of its tasks counts.
@@ -326,7 +338,15 @@ const titleKey = (title: string) => title.toLowerCase().replace(/[^a-z0-9]+/g, '
 
 const weekdayOf = (key: string) => new Date(Date.parse(key)).toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' });
 
-async function applyActions(db: SupabaseClient, actions: Action[], refs: Map<string, TaskRow>, clock: Clock, workspace: WorkspaceId) {
+async function applyActions(
+  db: SupabaseClient,
+  actions: Action[],
+  refs: Map<string, TaskRow>,
+  clock: Clock,
+  current: SpaceInfo,
+  spaces: SpaceInfo[],
+) {
+  const workspace: WorkspaceId = current.key;
   const results: Result[] = [];
   const skip = (title: string, detail: string) => results.push({ kind: 'skipped', title, detail, undo: null });
 
@@ -382,8 +402,11 @@ async function applyActions(db: SupabaseClient, actions: Action[], refs: Map<str
           due_date: dueDate,
           done,
           completed_at: done ? clock.toTimestamp(a.date) : null,
-          cadence_per_week: newTaskCadence(a.cadence_per_week, a.workspace === 'personal' || a.workspace === 'agency' ? a.workspace : workspace),
-          workspace: a.workspace === 'personal' || a.workspace === 'agency' ? a.workspace : workspace,
+          ...(() => {
+            // New tasks go in this space unless the user named another one.
+            const target = spaces.find((s) => s.key === a.workspace) ?? current;
+            return { cadence_per_week: newTaskCadence(a.cadence_per_week, target.kind), workspace: target.key };
+          })(),
           ...(started ? { created_at: started, last_updated: started } : {}),
           ...(waitingFor ? { waiting_since: started ?? new Date().toISOString(), waiting_for: waitingFor } : {}),
         })
@@ -429,7 +452,7 @@ async function applyActions(db: SupabaseClient, actions: Action[], refs: Map<str
         } else if (title) {
           const { data, error } = await db
             .from('tasks')
-            .insert({ text: title, cadence_per_week: workspace === 'agency' ? DEFAULT_CADENCE : null, workspace })
+            .insert({ text: title, cadence_per_week: current.kind === 'work' ? DEFAULT_CADENCE : null, workspace })
             .select('id')
             .single();
           if (error) {
@@ -850,7 +873,17 @@ async function handle(req: Request): Promise<Response> {
 
   const clock = makeClock(Number.isFinite(body.tz?.offsetMinutes) ? body.tz.offsetMinutes : 0);
 
-  const workspace: WorkspaceId = body.workspace === 'personal' ? 'personal' : 'agency';
+  // The user's spaces (built-ins plus theirs), and the one they're in.
+  const spaces: SpaceInfo[] = [...BUILTIN_SPACES];
+  for (const s of (body.spaces ?? []).slice(0, 30)) {
+    if (!s || typeof s.key !== 'string' || !SPACE_KEY.test(s.key)) continue;
+    const info: SpaceInfo = { key: s.key, name: clean(s.name, 40) || s.key, kind: s.kind === 'personal' ? 'personal' : 'work' };
+    const i = spaces.findIndex((x) => x.key === s.key);
+    if (i >= 0) spaces[i] = info;
+    else spaces.push(info);
+  }
+  const workspace: WorkspaceId = body.workspace && SPACE_KEY.test(body.workspace) ? body.workspace : 'agency';
+  const currentSpace = spaces.find((s) => s.key === workspace) ?? { key: workspace, name: workspace, kind: 'work' as const };
   // This workspace's tasks, leaving out archived ones and the trash.
   const { data: tasks, error: tasksError } = await db
     .from('tasks')
@@ -871,7 +904,7 @@ async function handle(req: Request): Promise<Response> {
   const allTasks = (tasks ?? []) as unknown as (TaskRow & { workspace: WorkspaceId })[];
   const here = allTasks.filter((t) => t.workspace === workspace);
   const elsewhere = allTasks.filter((t) => t.workspace !== workspace && !t.done);
-  const { refs, text: contextText } = buildContext(here, clock, clean(body.tz?.name ?? 'UTC', 64), clientInfo, workspace, elsewhere);
+  const { refs, text: contextText } = buildContext(here, clock, clean(body.tz?.name ?? 'UTC', 64), clientInfo, currentSpace, elsewhere, spaces);
 
   const history = (body.history ?? [])
     .slice(-MAX_HISTORY)
@@ -917,7 +950,7 @@ async function handle(req: Request): Promise<Response> {
   }
 
   const tModel = Date.now();
-  const results = await applyActions(db, output.actions, refs, clock, workspace);
+  const results = await applyActions(db, output.actions, refs, clock, currentSpace, spaces);
   // A drafted client message, tied back to its task so the app can log it as sent.
   const draftTask = output.draft?.task_ref ? refs.get(output.draft.task_ref.trim().toUpperCase()) : undefined;
   const draft =

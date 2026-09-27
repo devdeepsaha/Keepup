@@ -13,7 +13,7 @@ import {
 import { createChat, deleteChat, listChats, loadChat, saveMessages, type ChatSummary, type Entry } from '../lib/chats';
 import { dayKey } from '../lib/dates';
 import { clientKeyOf, clientTags, taskHandles } from '../lib/handles';
-import type { Task, Workspace } from '../types';
+import type { Space, Task, Workspace } from '../types';
 import { LiveOrb } from './LiveOrb';
 import { useBouncyQuip } from '../lib/quips';
 
@@ -104,15 +104,15 @@ function groupChats(chats: ChatSummary[]) {
 interface Props {
   workspace: Workspace; // chats and changes stay within this workspace
   tasks: Task[];
-  otherTasks?: Task[]; // the other workspace's open tasks: taggable too
-  otherName?: string;
+  otherTasks?: Task[]; // your other spaces' open tasks: taggable too
+  spaces?: Space[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onChanged: () => void;
   prefill?: { text: string; nonce: number } | null; // start the input with this (e.g. "@tomboy ")
 }
 
-export default function AssistantPanel({ workspace, tasks, otherTasks = [], otherName = '', open, onOpenChange, onChanged, prefill }: Props) {
+export default function AssistantPanel({ workspace, tasks, otherTasks = [], spaces = [], open, onOpenChange, onChanged, prefill }: Props) {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [chatTitle, setChatTitle] = useState<string | null>(null);
   const [activeChatId, setActiveChatId] = useState<string | null>(null); // highlighted in History
@@ -351,7 +351,7 @@ export default function AssistantPanel({ workspace, tasks, otherTasks = [], othe
           .map((t) => ({ tag: handles.get(t.id) ?? '', label: t.text, detail: '' })),
         ...otherTasks
           .filter((t) => (otherHandles.get(t.id) ?? '').includes(q) || t.text.toLowerCase().includes(q))
-          .map((t) => ({ tag: otherHandles.get(t.id) ?? '', label: t.text, detail: otherName })),
+          .map((t) => ({ tag: otherHandles.get(t.id) ?? '', label: t.text, detail: spaces.find((s) => s.key === t.workspace)?.name ?? 'Other space' })),
       ]
         .sort((a, b) => Number(b.tag.startsWith(q)) - Number(a.tag.startsWith(q)))
         .slice(0, 7)
@@ -417,7 +417,7 @@ export default function AssistantPanel({ workspace, tasks, otherTasks = [], othe
     let reply: Entry;
     try {
       const clientList = [...clients.values()].map((g) => ({ key: g.key, name: g.name, taskIds: g.tasks.map((t) => t.id) }));
-      const res = await askAssistant(msg, sentImages, history, tagged, clientList, workspace);
+      const res = await askAssistant(msg, sentImages, history, tagged, clientList, workspace, spaces);
       reply = {
         id: crypto.randomUUID(),
         role: 'assistant',

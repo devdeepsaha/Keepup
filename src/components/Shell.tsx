@@ -6,6 +6,7 @@ import { attentionFor, useNow } from '../lib/tasks';
 import { dayKey } from '../lib/dates';
 import { ClientColorsProvider } from '../lib/clientColors';
 import { usePrefs, type Density, type Theme } from '../lib/prefs';
+import { useSpaces } from '../lib/spaces';
 import { supabase } from '../lib/supabase';
 import type { Workspace as WorkspaceId } from '../types';
 import ArchiveView from './ArchiveView';
@@ -18,7 +19,6 @@ import Sidebar, {
   SIDEBAR_MIN,
   SIDEBAR_SNAP,
   SIDEBAR_WIDTH,
-  WORKSPACES,
   type Section,
   type View,
 } from './Sidebar';
@@ -44,7 +44,7 @@ function readWidth() {
 
 function readWorkspace(): WorkspaceId {
   try {
-    return localStorage.getItem(WORKSPACE_KEY) === 'personal' ? 'personal' : 'agency';
+    return localStorage.getItem(WORKSPACE_KEY) || 'agency';
   } catch {
     return 'agency';
   }
@@ -69,7 +69,9 @@ const VIEW_LABEL: Record<View, string> = {
 };
 
 export default function Shell({ user }: { user: User }) {
+  const { spaces, spaceOf } = useSpaces();
   const [workspace, setWorkspaceState] = useState<WorkspaceId>(readWorkspace);
+  const space = spaceOf(workspace);
   const {
     tasks,
     archived,
@@ -96,9 +98,9 @@ export default function Shell({ user }: { user: User }) {
     markPlannedSent,
     movePlanned,
     deletePlanned,
-  } = useTasks(user.id, workspace);
+  } = useTasks(user.id, workspace, space.kind);
   const prefs = usePrefs();
-  const otherWorkspace = useOtherWorkspace(user.id, workspace); // what's pending on the other side
+  const otherWorkspace = useOtherWorkspace(user.id, workspace); // what's pending in your other spaces
   const switchWorkspace = useCallback((w: WorkspaceId) => {
     setWorkspaceState(w);
     try {
@@ -160,21 +162,25 @@ export default function Shell({ user }: { user: User }) {
     saveWidth(w);
   };
 
-  // Ctrl/⌘+B toggles the sidebar, as in shadcn's sidebar; Alt+1 / Alt+2 switch workspace.
+  // Ctrl/⌘+B toggles the sidebar, as in shadcn's sidebar; Alt+1…9 switch space.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key.toLowerCase() === 'b' && (e.ctrlKey || e.metaKey) && !e.altKey) {
         e.preventDefault();
         toggleCollapsed();
       }
-      if (e.altKey && !e.ctrlKey && !e.metaKey && (e.code === 'Digit1' || e.code === 'Digit2')) {
-        e.preventDefault();
-        switchWorkspace(e.code === 'Digit1' ? 'agency' : 'personal');
+      const digit = /^Digit([1-9])$/.exec(e.code);
+      if (e.altKey && !e.ctrlKey && !e.metaKey && digit) {
+        const target = spaces[Number(digit[1]) - 1];
+        if (target) {
+          e.preventDefault();
+          switchWorkspace(target.key);
+        }
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [toggleCollapsed, switchWorkspace]);
+  }, [toggleCollapsed, switchWorkspace, spaces]);
 
   // On phones the sidebar is a drawer: close it once something in it was picked.
   const closeDrawerOnPhone = () => {
@@ -321,7 +327,7 @@ export default function Shell({ user }: { user: User }) {
           <span className="h-4 w-px bg-[var(--line-color)]" />
           <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-sm">
             <button onClick={() => navigate('workspace')} className="hidden sm:inline text-[var(--text-muted)] hover:text-[var(--text-main)] cursor-pointer">
-              {WORKSPACES[workspace].name}
+              {space.name}
             </button>
             <span className="hidden sm:inline text-[var(--text-muted)]">›</span>
             <span className="font-medium">{VIEW_LABEL[view]}</span>
@@ -346,10 +352,9 @@ export default function Shell({ user }: { user: User }) {
             onOpenIdChange={setOpenTaskId}
             notice={
               <OtherWorkspaceCard
-                other={otherWorkspace.other}
                 items={otherWorkspace.items}
-                onOpen={(id) => {
-                  switchWorkspace(otherWorkspace.other);
+                onOpen={(id, target) => {
+                  switchWorkspace(target);
                   setOpenTaskId(id);
                   setFocusTask({ id, nonce: Date.now() });
                 }}
@@ -406,7 +411,7 @@ export default function Shell({ user }: { user: User }) {
         workspace={workspace}
         tasks={tasks}
         otherTasks={otherWorkspace.tasks}
-        otherName={WORKSPACES[otherWorkspace.other].name}
+        spaces={spaces}
         open={assistantOpen}
         onOpenChange={setAssistantOpen}
         onChanged={refetch}

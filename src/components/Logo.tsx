@@ -1,21 +1,17 @@
 import { useId } from 'react';
 
-// Keepup's mark: the ring timer, mostly filled, with a tick. White tile, colourful gradient ring.
-// `personal` shifts the gradient to a fresher green, so the two workspaces are told apart at a glance.
-const STOPS = {
-  agency: ['#257ef4', '#06b6d4', '#10b981', '#22c55e'],
-  personal: ['#14b8a6', '#22c55e', '#84cc16', '#a3e635'],
-};
+// Keepup's mark: the ring timer, mostly filled, with a tick. White tile, gradient ring. `stops` tints the ring
+// (each space has its own); the default is Mint-more's blue into green.
+const DEFAULT_STOPS = ['#257ef4', '#06b6d4', '#10b981', '#22c55e'];
 
-export default function Logo({ size = 32, variant = 'agency' }: { size?: number; variant?: keyof typeof STOPS }) {
+export default function Logo({ size = 32, stops = DEFAULT_STOPS }: { size?: number; stops?: string[] }) {
   const id = useId().replace(/:/g, '');
-  const stops = STOPS[variant];
   return (
     <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden="true" className="shrink-0">
       <defs>
         <linearGradient id={`kg${id}`} x1="10" y1="10" x2="54" y2="54" gradientUnits="userSpaceOnUse">
           {stops.map((c, i) => (
-            <stop key={c} offset={i / (stops.length - 1)} stopColor={c} />
+            <stop key={`${c}${i}`} offset={stops.length > 1 ? i / (stops.length - 1) : 0} stopColor={c} />
           ))}
         </linearGradient>
       </defs>

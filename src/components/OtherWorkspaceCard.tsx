@@ -1,21 +1,21 @@
 import { useState } from 'react';
 import type { OtherItem } from '../hooks/useOtherWorkspace';
-import type { Workspace } from '../types';
 import { dayKey } from '../lib/dates';
-import { WORKSPACES } from './Sidebar';
+import { useSpaces } from '../lib/spaces';
 
-// A slim reminder from the other workspace: what needs attention there, without mixing it into this list.
+// A slim reminder from your other spaces: what needs attention there, without mixing it into this list.
 // "Hide for today" keeps it out of the way until tomorrow.
 
 interface Props {
-  other: Workspace;
   items: OtherItem[];
-  onOpen: (taskId: string) => void; // switch to that workspace and open the task
+  onOpen: (taskId: string, space: string) => void; // switch to that space and open the task
 }
 
 const HIDE_KEY = 'agenda.otherHidden';
 
-export default function OtherWorkspaceCard({ other, items, onOpen }: Props) {
+export default function OtherWorkspaceCard({ items, onOpen }: Props) {
+  const { spaceOf } = useSpaces();
+  const other = 'others';
   const today = dayKey(new Date());
   const [hidden, setHidden] = useState(() => {
     try {
@@ -34,7 +34,8 @@ export default function OtherWorkspaceCard({ other, items, onOpen }: Props) {
       // storage unavailable: hidden until reload
     }
   };
-  const name = WORKSPACES[other].name;
+  const spacesInvolved = [...new Set(items.map((i) => i.task.workspace ?? 'agency'))];
+  const name = spacesInvolved.length === 1 ? spaceOf(spacesInvolved[0]).name : 'Other spaces';
   const urgent = items.some((i) => i.attention.tone === 'red');
 
   return (
@@ -56,10 +57,15 @@ export default function OtherWorkspaceCard({ other, items, onOpen }: Props) {
         {items.slice(0, 3).map(({ task, attention }) => (
           <li key={task.id}>
             <button
-              onClick={() => onOpen(task.id)}
+              onClick={() => onOpen(task.id, task.workspace ?? 'agency')}
               className="group flex w-full items-baseline gap-2 rounded-lg py-1 text-left cursor-pointer"
             >
-              <span className="min-w-0 flex-1 truncate text-sm font-medium group-hover:text-[var(--accent)]">{task.text}</span>
+              <span className="min-w-0 flex-1 truncate text-sm font-medium group-hover:text-[var(--accent)]">
+                {task.text}
+                {spacesInvolved.length > 1 && (
+                  <span className="ml-1.5 font-display text-[0.6875rem] font-normal text-[var(--text-muted)]">{spaceOf(task.workspace ?? 'agency').name}</span>
+                )}
+              </span>
               <span className={`shrink-0 font-display text-[0.6875rem] ${attention.tone === 'red' ? 'text-red-500' : 'text-amber-600'}`}>
                 {attention.label}
               </span>
@@ -69,10 +75,10 @@ export default function OtherWorkspaceCard({ other, items, onOpen }: Props) {
       </ul>
       {items.length > 3 && (
         <button
-          onClick={() => onOpen(items[3].task.id)}
+          onClick={() => onOpen(items[3].task.id, items[3].task.workspace ?? 'agency')}
           className="mt-1 font-display text-[0.6875rem] text-[var(--text-muted)] hover:text-[var(--text-main)] cursor-pointer"
         >
-          + {items.length - 3} more in {name} →
+          + {items.length - 3} more {spacesInvolved.length === 1 ? `in ${name}` : 'elsewhere'} →
         </button>
       )}
     </div>

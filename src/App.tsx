@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
 import Shell from './components/Shell';
+import { SpacesProvider } from './lib/spaces';
 import Auth from './components/Auth';
 
 function MissingConfig() {
@@ -39,5 +40,11 @@ export default function App() {
 
   if (!isSupabaseConfigured) return <MissingConfig />;
   if (!ready) return null;
-  return session ? <Shell key={session.user.id} user={session.user} /> : <Auth />;
+  return session ? (
+    <SpacesProvider key={session.user.id}>
+      <Shell user={session.user} />
+    </SpacesProvider>
+  ) : (
+    <Auth />
+  );
 }

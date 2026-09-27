@@ -13,10 +13,9 @@ export interface OtherItem {
   attention: Attention;
 }
 
-// What needs attention in the workspace you're NOT looking at, so it can nudge you from here.
+// What needs attention in the spaces you're NOT looking at, so they can nudge you from here.
 // Refreshed on load, every few minutes, when the tab comes back into view, and on any task change.
 export function useOtherWorkspace(userId: string, current: Workspace) {
-  const other: Workspace = current === 'agency' ? 'personal' : 'agency';
   const [tasks, setTasks] = useState<Task[]>([]);
   const now = useNow();
 
@@ -24,12 +23,12 @@ export function useOtherWorkspace(userId: string, current: Workspace) {
     const { data } = await supabase
       .from('tasks')
       .select(SELECT)
-      .eq('workspace', other)
+      .neq('workspace', current)
       .eq('done', false)
       .is('deleted_at', null)
       .is('archived_at', null);
     if (data) setTasks(data as unknown as Task[]);
-  }, [other]);
+  }, [current]);
 
   useEffect(() => {
     setTasks([]);
@@ -38,7 +37,7 @@ export function useOtherWorkspace(userId: string, current: Workspace) {
     const onVisible = () => document.visibilityState === 'visible' && load();
     document.addEventListener('visibilitychange', onVisible);
     const channel = supabase
-      .channel(`other-${userId}-${other}`)
+      .channel(`other-${userId}-${current}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks', filter: `user_id=eq.${userId}` }, () => load())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'task_updates', filter: `user_id=eq.${userId}` }, () => load())
       .subscribe();
@@ -47,7 +46,7 @@ export function useOtherWorkspace(userId: string, current: Workspace) {
       document.removeEventListener('visibilitychange', onVisible);
       supabase.removeChannel(channel);
     };
-  }, [load, userId, other]);
+  }, [load, userId, current]);
 
   const items = useMemo(() => {
     const todayKey = dayKey(new Date(now));
@@ -58,5 +57,5 @@ export function useOtherWorkspace(userId: string, current: Workspace) {
       .sort((a, b) => b.attention.score - a.attention.score);
   }, [tasks, now]);
 
-  return { other, items, tasks };
+  return { items, tasks };
 }

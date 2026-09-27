@@ -6,6 +6,7 @@ import { clientKeyOf, groupClients, monograms, rhythmScopes } from '../lib/handl
 import { addDays, dayKey, startOfWeek } from '../lib/dates';
 import { ColorSwatches, useClientColors } from '../lib/clientColors';
 import Logo from './Logo';
+import { spaceGradient, useSpaces } from '../lib/spaces';
 import { useLongPress } from '../lib/useLongPress';
 import type { Density, Theme } from '../lib/prefs';
 import type { Task, Workspace } from '../types';
@@ -15,11 +16,6 @@ import type { Task, Workspace } from '../types';
 
 export type View = 'workspace' | 'calendar' | 'year' | 'stats' | 'archive';
 export type Section = 'needs-attention' | 'in-progress' | 'waiting' | 'archived' | 'trash';
-
-export const WORKSPACES: Record<Workspace, { name: string; detail: string; letter: string }> = {
-  agency: { name: 'Mint-more', detail: 'Agency workspace', letter: 'M' },
-  personal: { name: 'Personal', detail: 'Personal workspace', letter: 'P' },
-};
 
 export const SIDEBAR_WIDTH = 256; // px, expanded (default; drag the edge to resize)
 export const SIDEBAR_MIN = 200;
@@ -47,7 +43,7 @@ interface Props {
   onArchiveTask: (id: string) => void;
   workspace: Workspace;
   onSwitchWorkspace: (w: Workspace) => void;
-  otherAttention: number; // tasks needing attention in the other workspace
+  otherAttention: number; // tasks needing attention in your other spaces
   archivedCount: number;
   trashedCount: number;
   theme: Theme;
@@ -149,45 +145,53 @@ export default function Sidebar({
 }: Props) {
   const { colorOf } = useClientColors();
   const [switcher, setSwitcher] = useState(false);
-  // Hold the switcher, drag onto a workspace, let go: switched. (A tap still just opens the menu.)
-  const [dragHover, setDragHover] = useState<Workspace | null>(null);
-  const holdTimer = useRef<number | undefined>(undefined);
-  const heldOpen = useRef(false);
-  const startSwitcherHold = (e: React.PointerEvent) => {
-    if (e.button !== 0) return;
-    heldOpen.current = false;
-    window.clearTimeout(holdTimer.current);
-    holdTimer.current = window.setTimeout(() => {
-      heldOpen.current = true;
-      navigator.vibrate?.(12);
-      setSwitcher(true);
-      setDragHover(null);
-      let last: Workspace | null = null;
-      const move = (ev: PointerEvent) => {
-        const el = document.elementFromPoint(ev.clientX, ev.clientY)?.closest<HTMLElement>('[data-ws]');
-        const ws = (el?.dataset.ws as Workspace | undefined) ?? null;
-        if (ws !== last) {
-          last = ws;
-          if (ws) navigator.vibrate?.(6);
-          setDragHover(ws);
-        }
-      };
-      const up = () => {
-        window.removeEventListener('pointermove', move);
-        window.removeEventListener('pointerup', up);
-        window.removeEventListener('pointercancel', up);
-        setDragHover(null);
-        if (last) {
-          setSwitcher(false);
-          if (last !== workspace) onSwitchWorkspace(last);
-        } // let go elsewhere: the menu stays open, as after a tap
-      };
-      window.addEventListener('pointermove', move);
-      window.addEventListener('pointerup', up);
-      window.addEventListener('pointercancel', up);
-    }, 350);
+  const { spaces, spaceOf, createSpace } = useSpaces();
+  const current = spaceOf(workspace);
+  const spaceIndex = Math.max(0, spaces.findIndex((sp) => sp.key === workspace));
+  // Hold and drag the switcher sideways: it switches straight to the next space (left) or the previous one
+  // (right), with the name sliding over. A tap still opens the menu.
+  const [slide, setSlide] = useState<{ dir: 'next' | 'prev'; n: number } | null>(null);
+  const drag = useRef<{ x: number; y: number; done: boolean } | null>(null);
+  const dragged = useRef(false);
+  const stepSpace = (dir: 'next' | 'prev') => {
+    if (spaces.length < 2) return;
+    const next = spaces[(spaceIndex + (dir === 'next' ? 1 : -1) + spaces.length) % spaces.length];
+    navigator.vibrate?.(10);
+    setSlide((prev) => ({ dir, n: (prev?.n ?? 0) + 1 }));
+    onSwitchWorkspace(next.key);
   };
-  const cancelSwitcherHold = () => window.clearTimeout(holdTimer.current);
+  const startSwitcherDrag = (e: React.PointerEvent) => {
+    if (e.button !== 0) return;
+    drag.current = { x: e.clientX, y: e.clientY, done: false };
+    dragged.current = false;
+  };
+  const moveSwitcherDrag = (e: React.PointerEvent) => {
+    const d = drag.current;
+    if (!d || d.done) return;
+    const dx = e.clientX - d.x;
+    if (Math.abs(dx) > 36 && Math.abs(dx) > Math.abs(e.clientY - d.y)) {
+      d.done = true; // one switch per drag
+      dragged.current = true;
+      setSwitcher(false);
+      stepSpace(dx < 0 ? 'next' : 'prev');
+    }
+  };
+  const endSwitcherDrag = () => {
+    drag.current = null;
+  };
+  // New space form, in the switcher menu.
+  const [newSpace, setNewSpace] = useState<{ name: string; kind: 'work' | 'personal'; error?: string } | null>(null);
+  const submitNewSpace = async () => {
+    if (!newSpace?.name.trim()) return setNewSpace((v) => (v ? { ...v, error: 'Give it a name' } : v));
+    try {
+      const key = await createSpace(newSpace.name, newSpace.kind);
+      setNewSpace(null);
+      setSwitcher(false);
+      onSwitchWorkspace(key);
+    } catch (err) {
+      setNewSpace((v) => (v ? { ...v, error: (err as Error).message } : v));
+    }
+  };
   const switcherRef = useOutsideClose(switcher, () => setSwitcher(false));
   const now = useNow();
   const todayKey = dayKey(new Date(now));
@@ -297,7 +301,7 @@ export default function Sidebar({
       ],
     },
   ];
-  const clientsLabel = workspace === 'agency' ? 'Work' : 'Projects';
+  const clientsLabel = current.kind === 'work' ? 'Work' : 'Projects';
 
   const itemBase =
     'no-callout group/item relative flex w-full items-center gap-2.5 rounded-lg px-2.5 h-9 text-sm transition-colors cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[#257EF4]';
@@ -537,33 +541,34 @@ export default function Sidebar({
         collapsed ? '' : 'shadow-xl md:shadow-none'
       }`}
     >
-      {/* Header: workspace switcher, as in sidebar-07's team switcher */}
+      {/* Header: space switcher, as in sidebar-07's team switcher. Tap: menu. Drag sideways: next space. */}
       <div className="relative flex items-center gap-1 p-2" ref={switcherRef}>
         <button
-          onPointerDown={startSwitcherHold}
-          onPointerUp={cancelSwitcherHold}
-          onPointerLeave={cancelSwitcherHold}
+          onPointerDown={startSwitcherDrag}
+          onPointerMove={moveSwitcherDrag}
+          onPointerUp={endSwitcherDrag}
+          onPointerCancel={endSwitcherDrag}
+          onPointerLeave={endSwitcherDrag}
           onContextMenu={(e) => e.preventDefault()}
           onClick={() => {
-            if (heldOpen.current) {
-              heldOpen.current = false; // the hold already opened it
+            if (dragged.current) {
+              dragged.current = false; // that was a swipe, not a tap
               return;
             }
             setSwitcher((v) => !v);
           }}
           onDoubleClick={() => {
-            // Double-click: jump straight to the other workspace.
             setSwitcher(false);
-            onSwitchWorkspace(workspace === 'agency' ? 'personal' : 'agency');
+            stepSpace('next');
           }}
           aria-expanded={switcher}
-          className={`${itemBase} h-12 p-1.5 ${collapsed ? 'justify-center px-0' : ''} ${switcher ? 'bg-[var(--surface)] shadow-sm' : 'hover:bg-[var(--surface)]/70'}`}
+          className={`${itemBase} h-12 touch-pan-y p-1.5 ${collapsed ? 'justify-center px-0' : ''} ${switcher ? 'bg-[var(--surface)] shadow-sm' : 'hover:bg-[var(--surface)]/70'}`}
         >
           <span className="relative shrink-0">
-            <Logo size={32} variant={workspace} />
+            <Logo size={32} stops={spaceGradient(current)} />
             {otherAttention > 0 && (
               <span
-                title={`${otherAttention} need attention in ${WORKSPACES[workspace === 'agency' ? 'personal' : 'agency'].name}`}
+                title={`${otherAttention} need attention in your other spaces`}
                 className="absolute -top-1.5 -right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[0.625rem] font-semibold leading-none text-white ring-2 ring-[var(--bg-color)]"
               >
                 {otherAttention > 9 ? '9+' : otherAttention}
@@ -572,14 +577,22 @@ export default function Sidebar({
           </span>
           {!collapsed && (
             <>
-              <span className="grid min-w-0 flex-1 text-left leading-tight">
-                <span className="truncate font-display text-sm font-semibold">{WORKSPACES[workspace].name}</span>
-                <span className="truncate text-xs text-[var(--text-muted)]">{WORKSPACES[workspace].detail}</span>
+              <span className="relative grid min-w-0 flex-1 overflow-hidden text-left leading-tight">
+                <span
+                  key={`${workspace}-${slide?.n ?? 0}`}
+                  className={`grid min-w-0 ${slide ? (slide.dir === 'next' ? 'space-slide-next' : 'space-slide-prev') : ''}`}
+                >
+                  <span className="truncate font-display text-sm font-semibold">{current.name}</span>
+                  <span className="truncate text-xs text-[var(--text-muted)]">
+                    {current.kind === 'work' ? 'Client work' : 'Personal space'}
+                    {spaces.length > 1 && <span className="opacity-60"> · {spaceIndex + 1}/{spaces.length}</span>}
+                  </span>
+                </span>
               </span>
               <Icon d={UPDOWN} className="w-4 h-4 text-[var(--text-muted)]" />
             </>
           )}
-          <Tip collapsed={collapsed} label={`${WORKSPACES[workspace].name} · double-click to switch`} />
+          <Tip collapsed={collapsed} label={`${current.name} · swipe or double-click to switch`} />
         </button>
         {/* Phones: close the drawer */}
         {!collapsed && (
@@ -593,36 +606,90 @@ export default function Sidebar({
         )}
         {switcher && (
           <div
-            className={`absolute z-50 w-60 rounded-xl border border-[var(--line-color)] bg-[var(--surface)] py-1 text-sm shadow-xl ${
+            className={`absolute z-50 w-64 rounded-xl border border-[var(--line-color)] bg-[var(--surface)] py-1 text-sm shadow-xl ${
               collapsed ? 'top-2 left-full ml-2' : 'top-full left-2 mt-1'
             }`}
           >
-            <div className="px-3 py-1.5 font-display text-[0.6875rem] text-[var(--text-muted)]">Workspaces</div>
-            {(Object.keys(WORKSPACES) as Workspace[]).map((w, i) => (
+            <div className="px-3 py-1.5 font-display text-[0.6875rem] text-[var(--text-muted)]">Spaces</div>
+            {spaces.map((sp, i) => (
               <button
-                key={w}
-                data-ws={w}
+                key={sp.key}
                 onClick={() => {
                   setSwitcher(false);
-                  if (w !== workspace) onSwitchWorkspace(w);
+                  if (sp.key !== workspace) onSwitchWorkspace(sp.key);
                 }}
-                className={`flex w-full items-center gap-2.5 px-3 py-2.5 hover:bg-[var(--bg-color)] cursor-pointer ${
-                  dragHover === w ? 'bg-[var(--accent-soft)] text-[var(--accent)]' : ''
-                }`}
+                className="flex w-full items-center gap-2.5 px-3 py-2.5 hover:bg-[var(--bg-color)] cursor-pointer"
               >
-                <span
-                  className="flex h-6 w-6 items-center justify-center rounded-md border border-[var(--line-color)] font-display text-[0.6875rem] font-semibold"
-                  style={{ color: w === 'agency' ? 'var(--accent)' : '#8b5cf6' }}
-                >
-                  {WORKSPACES[w].letter}
-                </span>
-                <span className="flex-1 text-left">{WORKSPACES[w].name}</span>
-                {w !== workspace && otherAttention > 0 && (
-                  <span className="rounded-full bg-red-500/10 px-2 py-0.5 font-display text-[0.6875rem] text-red-500">{otherAttention} need attention</span>
+                <Logo size={24} stops={spaceGradient(sp)} />
+                <span className="min-w-0 flex-1 truncate text-left">{sp.name}</span>
+                {sp.key === workspace ? (
+                  <Icon d={CHECK} className="w-4 h-4 text-[var(--accent)]" />
+                ) : (
+                  i < 9 && <kbd className="text-[0.6875rem] text-[var(--text-muted)]">Alt {i + 1}</kbd>
                 )}
-                {w === workspace ? <Icon d={CHECK} className="w-4 h-4 text-[var(--accent)]" /> : <kbd className="text-[0.6875rem] text-[var(--text-muted)]">Alt {i + 1}</kbd>}
               </button>
             ))}
+            <div className="my-1 h-px bg-[var(--line-color)]" />
+            {newSpace ? (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  submitNewSpace();
+                }}
+                className="space-y-2 px-3 py-2"
+              >
+                <input
+                  autoFocus
+                  value={newSpace.name}
+                  onChange={(e) => setNewSpace({ ...newSpace, name: e.target.value, error: undefined })}
+                  placeholder="Space name, e.g. Freelance"
+                  maxLength={40}
+                  className="w-full rounded-lg border border-[var(--line-color)] bg-transparent px-2.5 py-1.5 text-sm outline-none focus:border-[var(--accent)]"
+                />
+                <div className="flex rounded-lg bg-[var(--bg-color)] p-0.5">
+                  {(['work', 'personal'] as const).map((k) => (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => setNewSpace({ ...newSpace, kind: k })}
+                      className={`flex-1 rounded-md py-1 text-xs transition-colors cursor-pointer ${
+                        newSpace.kind === k ? 'bg-[var(--surface)] font-medium shadow-sm' : 'text-[var(--text-muted)]'
+                      }`}
+                    >
+                      {k === 'work' ? 'Client work' : 'Personal'}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[0.6875rem] leading-snug text-[var(--text-muted)]">
+                  {newSpace.kind === 'work'
+                    ? 'Clients, twice-a-week check-ins and planned updates.'
+                    : 'A plain to-do list: deadlines and quiet tasks only.'}
+                </p>
+                {newSpace.error && <p className="text-xs text-red-500">{newSpace.error}</p>}
+                <div className="flex gap-2">
+                  <button type="submit" className="flex-1 rounded-lg bg-[var(--text-main)] py-1.5 text-xs font-semibold text-[var(--bg-color)] cursor-pointer">
+                    Create space
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNewSpace(null)}
+                    className="rounded-lg px-3 py-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--text-main)] cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <button
+                onClick={() => setNewSpace({ name: '', kind: 'work' })}
+                className="flex w-full items-center gap-2.5 px-3 py-2.5 text-[var(--text-muted)] hover:bg-[var(--bg-color)] hover:text-[var(--text-main)] cursor-pointer"
+              >
+                <span className="flex h-6 w-6 items-center justify-center rounded-md border border-[var(--line-color)]">
+                  <Icon d="M12 5v14M5 12h14" className="w-3.5 h-3.5" />
+                </span>
+                New space
+              </button>
+            )}
           </div>
         )}
       </div>

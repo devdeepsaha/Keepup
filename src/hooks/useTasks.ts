@@ -9,12 +9,12 @@ const SELECT =
 
 export const TRASH_DAYS = 30;
 
-// Personal tasks aren't client work, so they start without a check-in rhythm.
-export const defaultCadence = (workspace: Workspace) => (workspace === 'agency' ? DEFAULT_CADENCE : null);
+// Tasks in a personal space aren't client work, so they start without a check-in rhythm.
+export const defaultCadence = (kind: 'work' | 'personal') => (kind === 'work' ? DEFAULT_CADENCE : null);
 
 // All of one workspace's tasks. `tasks` are the live ones everything else works with; archived and trashed
 // ones are kept apart (archived still count as history).
-export function useTasks(userId: string, workspace: Workspace) {
+export function useTasks(userId: string, workspace: Workspace, kind: 'work' | 'personal' = 'work') {
   const [loaded, setLoaded] = useState<{ workspace: Workspace; tasks: Task[] } | null>(null);
   // Only the current workspace's tasks: right after a switch, nothing shows until they've loaded.
   const all = useMemo(() => (loaded?.workspace === workspace ? loaded.tasks : []), [loaded, workspace]);
@@ -94,7 +94,7 @@ export function useTasks(userId: string, workspace: Workspace) {
         done: false,
         completed_at: null,
         due_date,
-        cadence_per_week: defaultCadence(workspace),
+        cadence_per_week: defaultCadence(kind),
         workspace,
         last_updated: now,
         created_at: now,
@@ -102,10 +102,10 @@ export function useTasks(userId: string, workspace: Workspace) {
       };
       setTasks((prev) => [task, ...prev]);
       return commit(
-        supabase.from('tasks').insert({ id: task.id, text, due_date, cadence_per_week: defaultCadence(workspace), workspace }),
+        supabase.from('tasks').insert({ id: task.id, text, due_date, cadence_per_week: defaultCadence(kind), workspace }),
       );
     },
-    [commit, setTasks, workspace],
+    [commit, setTasks, workspace, kind],
   );
 
   const toggleTask = useCallback(

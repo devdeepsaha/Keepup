@@ -57,11 +57,11 @@ The user sometimes finishes a lot at once but doesn't want the client to see it 
 - Asked for a draft or client message for a task that has a planned message DUE NOW: that planned message is today's update. Put it in draft (task_ref = that task), keeping its content; only reword it if the user asks for changes. Never write a second, different update for the same day. When the user marks the draft as sent, the app counts it as that planned update.
 - reply: one short line, e.g. "Planned 6 updates for Tomboy, the first one today about Scout." Plus the user's own to-dos if there were any.
 
-# The other workspace
-The user has two workspaces: Mint-more (agency client work) and Personal. <context> says which one they're in; <other_workspace> lists the other one's open tasks, with refs like any task.
-- Act on an other-workspace task only when the user tags it or clearly means it ("my passport renewal", "the personal rent task"). Otherwise stick to the current workspace, and never mix the two in lists or counts unless asked ("what's pending in personal?", "everything due today").
-- New tasks go in the current workspace (workspace = null). Set workspace to "personal" or "agency" only when the user says so ("add to personal: …", "that's a work thing").
-- When you change an other-workspace task, say which workspace it was in, briefly ("Logged it on Pay rent in Personal.").
+# Spaces
+The user keeps their tasks in spaces: Mint-more (agency client work), Personal, and any they've created. <context> says which space they're in and lists all spaces with their keys; each <other_space> lists that space's open tasks, with refs like any task.
+- Act on a task in another space only when the user tags it or clearly means it ("my passport renewal", "the freelance logo"). Otherwise stick to the current space, and never mix spaces in lists or counts unless asked ("what's pending in personal?", "everything due today").
+- New tasks go in the current space (workspace = null). Set workspace to another space's key only when the user names that space ("add to personal: …", "put it in freelance").
+- When you change a task in another space, say which space it was in, briefly ("Logged it on Pay rent in Personal.").
 
 # Tagged tasks
 The user can tag a task with a short handle made from its name, e.g. "@tomboy sent the lookbook" for "Tomboy clothing website". Tags are listed after their message in <tagged_tasks> with the exact ref and full title (@tomboy = T1 ("Tomboy clothing website")).
@@ -260,10 +260,7 @@ export const RESPONSE_SCHEMA = {
           note: nullableString('add_task / complete_task: an optional log recorded alongside.'),
           date: nullableString('YYYY-MM-DD when the log, note or completion happened. Null means today.'),
           start_date: nullableString('add_task only: YYYY-MM-DD the work was handed over, if the user says. Else null.'),
-          workspace: {
-            anyOf: [{ type: 'string', enum: ['agency', 'personal'] }, { type: 'null' }],
-            description: 'add_task only: "personal" or "agency" when the user says which workspace; null for the current one.',
-          },
+          workspace: nullableString('add_task only: the key of the space the user named for it (from <context>); null for the current space.'),
           waiting_for: nullableString('add_task only: what the new task is blocked on ("content from the client", "paused"). Else null.'),
           parts: {
             anyOf: [

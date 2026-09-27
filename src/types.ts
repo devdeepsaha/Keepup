@@ -37,4 +37,14 @@ export interface PlannedUpdate {
   sent_at: string | null;
 }
 
-export type Workspace = 'agency' | 'personal';
+// A space's key: the built-in 'agency' (Mint-more) and 'personal', or one you created.
+export type Workspace = string;
+
+export interface Space {
+  key: string;
+  name: string;
+  kind: 'work' | 'personal'; // work: clients, rhythms, client updates; personal: a plain to-do list
+  color: string;
+  position: number;
+  builtin?: boolean;
+}
