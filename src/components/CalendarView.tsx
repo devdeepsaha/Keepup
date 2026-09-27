@@ -98,7 +98,6 @@ function Tile({ label, color, state, size = 16, onGradient = false }: { label: s
         background: solid ? (onGradient ? 'rgba(255,255,255,0.95)' : color) : 'transparent',
         color: solid ? (onGradient ? '#1b5fd6' : '#ffffff') : c,
         border: solid ? undefined : `1.5px ${state === 'planned' ? 'dashed' : 'solid'} ${c}`,
-        textDecoration: state === 'missed' ? 'line-through' : undefined,
         opacity: state === 'planned' && !onGradient ? 0.85 : 1,
       }}
     >
@@ -336,8 +335,10 @@ export default function CalendarView({ tasks, loading, initialDay, onToggle }: P
   );
 
   return (
-    <div className="mx-auto max-w-7xl px-4 pt-2 pb-8 md:px-8 lg:px-10">
-      <header className="mb-4 flex items-end justify-between gap-3">
+    <div className="mx-auto max-w-[1500px] px-4 pb-8 md:px-8 lg:px-10">
+      {/* Pinned: the month, Today and the quick ranges stay put while you scroll */}
+      <div className="sticky top-0 z-20 -mx-4 mb-4 bg-[var(--bg-color)]/95 px-4 pt-2 pb-3 backdrop-blur md:-mx-8 md:px-8 lg:-mx-10 lg:px-10">
+      <header className="mb-3 flex items-end justify-between gap-3">
         <div className="min-w-0">
           <div className="mb-1 font-display text-xs font-bold uppercase tracking-widest text-accent-gradient">Calendar</div>
           <h1 className="font-display text-3xl font-bold tracking-tight md:text-4xl">
@@ -353,7 +354,7 @@ export default function CalendarView({ tasks, loading, initialDay, onToggle }: P
       </header>
 
       {/* Quick ranges: one row, swipe sideways on phones */}
-      <div className="-mx-4 mb-4 flex gap-2 overflow-x-auto px-4 pb-1 md:mx-0 md:flex-wrap md:px-0">
+      <div className="-mx-4 flex gap-2 overflow-x-auto px-4 md:mx-0 md:flex-wrap md:px-0">
         {presets.map((p) => {
           const active = dayKey(p.from) === fromKey && dayKey(p.to) === toKey;
           return (
@@ -369,10 +370,13 @@ export default function CalendarView({ tasks, loading, initialDay, onToggle }: P
           );
         })}
       </div>
+      </div>
 
-      <div className="grid gap-5 lg:grid-cols-[1fr_360px]">
+      {/* Calendar and the day's story share the width evenly; on big screens both fit the window and the story
+          scrolls on its own, so the calendar never moves. */}
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] lg:items-start">
         {/* Calendar */}
-        <div className="rounded-2xl border border-[var(--line-color)] bg-[var(--surface)] p-2 shadow-sm sm:p-4">
+        <div className="rounded-2xl border border-[var(--line-color)] bg-[var(--surface)] p-2 shadow-sm sm:p-4 lg:sticky lg:top-[8.5rem]">
           <CalendarData.Provider value={ctx}>
             <DayPicker
               mode="range"
@@ -413,7 +417,7 @@ export default function CalendarView({ tasks, loading, initialDay, onToggle }: P
                 weekdays: '',
                 weekday: 'pb-1.5 font-display text-[0.625rem] font-medium uppercase tracking-widest text-[var(--text-muted)] sm:text-[0.6875rem]',
                 week: '',
-                day: 'h-[52px] p-[2px] align-top sm:h-[72px]',
+                day: 'h-[52px] p-[2px] align-top sm:h-[64px]',
                 today: '',
                 selected: '',
                 range_start: '',
@@ -434,7 +438,7 @@ export default function CalendarView({ tasks, loading, initialDay, onToggle }: P
         </div>
 
         {/* The selection's story */}
-        <aside className="rounded-2xl border border-[var(--line-color)] bg-[var(--surface)] p-4 shadow-sm lg:max-h-[calc(100vh-10rem)] lg:overflow-y-auto">
+        <aside className="rounded-2xl border border-[var(--line-color)] bg-[var(--surface)] p-4 shadow-sm sm:p-5 lg:sticky lg:top-[8.5rem] lg:max-h-[calc(100vh-10rem)] lg:overflow-y-auto">
           <div className="mb-4">
             <div className="font-display text-[0.6875rem] uppercase tracking-widest text-[var(--text-muted)]">
               {single ? fmt(from, { year: 'numeric' }) : `${selected.length ? plural(selected.length, 'active day') : 'No activity'}`}
@@ -453,7 +457,7 @@ export default function CalendarView({ tasks, loading, initialDay, onToggle }: P
                 {selected.map(({ key, info }) => (
                   <section key={key}>
                     {!single && (
-                      <div className="sticky top-0 z-10 mb-2 bg-[var(--surface)] py-1 font-display text-[0.6875rem] font-semibold uppercase tracking-widest text-[var(--text-muted)]">
+                      <div className="sticky -top-4 z-20 -mx-4 mb-2 border-b border-[var(--line-color)] bg-[var(--surface)] px-4 py-2 font-display text-[0.6875rem] font-semibold uppercase tracking-widest text-[var(--text-muted)] sm:-top-5 sm:-mx-5 sm:px-5">
                         {key === todayKey ? 'Today' : fmt(keyToDate(key), { weekday: 'short', month: 'short', day: 'numeric' })}
                       </div>
                     )}
