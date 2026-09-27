@@ -48,6 +48,7 @@ interface Props {
   onOpenAssistant: () => void;
   workspace: Workspace;
   onSwitchWorkspace: (w: Workspace) => void;
+  otherAttention: number; // tasks needing attention in the other workspace
   archivedCount: number;
   trashedCount: number;
   theme: Theme;
@@ -141,6 +142,7 @@ export default function Sidebar({
   onOpenAssistant,
   workspace,
   onSwitchWorkspace,
+  otherAttention,
   archivedCount,
   trashedCount,
   theme,
@@ -510,7 +512,17 @@ export default function Sidebar({
           aria-expanded={switcher}
           className={`${itemBase} h-12 p-1.5 ${collapsed ? 'justify-center px-0' : ''} ${switcher ? 'bg-[var(--surface)] shadow-sm' : 'hover:bg-[var(--surface)]/70'}`}
         >
-          <Logo size={32} variant={workspace} />
+          <span className="relative shrink-0">
+            <Logo size={32} variant={workspace} />
+            {otherAttention > 0 && (
+              <span
+                title={`${otherAttention} need attention in ${WORKSPACES[workspace === 'agency' ? 'personal' : 'agency'].name}`}
+                className="absolute -top-1.5 -right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[0.625rem] font-semibold leading-none text-white ring-2 ring-[var(--bg-color)]"
+              >
+                {otherAttention > 9 ? '9+' : otherAttention}
+              </span>
+            )}
+          </span>
           {!collapsed && (
             <>
               <span className="grid min-w-0 flex-1 text-left leading-tight">
@@ -555,6 +567,9 @@ export default function Sidebar({
                   {WORKSPACES[w].letter}
                 </span>
                 <span className="flex-1 text-left">{WORKSPACES[w].name}</span>
+                {w !== workspace && otherAttention > 0 && (
+                  <span className="rounded-full bg-red-500/10 px-2 py-0.5 font-display text-[0.6875rem] text-red-500">{otherAttention} need attention</span>
+                )}
                 {w === workspace ? <Icon d={CHECK} className="w-4 h-4 text-[var(--accent)]" /> : <kbd className="text-[0.6875rem] text-[var(--text-muted)]">Alt {i + 1}</kbd>}
               </button>
             ))}

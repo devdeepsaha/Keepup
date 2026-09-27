@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import type { PlannedUpdate, Task } from '../types';
 import { dayKey } from '../lib/dates';
 import { attentionFor, byDueThenOldest, useNow, type Attention } from '../lib/tasks';
@@ -10,6 +10,7 @@ interface Props {
   loading: boolean;
   focusTask?: { id: string; nonce: number } | null; // scroll to this task
   openId: string | null; // the one open task
+  notice?: ReactNode; // e.g. what needs attention in the other workspace
   onOpenIdChange: (id: string | null) => void;
   onAddTask: (text: string, due: string | null) => void;
   onToggle: (id: string, done: boolean) => void;
@@ -37,7 +38,7 @@ interface Entry {
 const greeting = (hour: number) => (hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening');
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
-export default function Workspace({ tasks, loading, focusTask, openId, onOpenIdChange, onAddTask, onToggle, ...itemHandlers }: Props) {
+export default function Workspace({ tasks, loading, focusTask, openId, onOpenIdChange, notice, onAddTask, onToggle, ...itemHandlers }: Props) {
   const now = useNow();
   const today = new Date(now);
   const todayKey = dayKey(today);
@@ -138,6 +139,8 @@ export default function Workspace({ tasks, loading, focusTask, openId, onOpenIdC
         </div>
         <h1 className="font-display text-3xl md:text-4xl font-bold tracking-tight">{headline}</h1>
       </header>
+
+      {notice}
 
       {/* Capture */}
       <form

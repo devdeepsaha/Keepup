@@ -24,6 +24,8 @@ import Sidebar, {
 } from './Sidebar';
 import Workspace from './Workspace';
 import MobileNav from './MobileNav';
+import OtherWorkspaceCard from './OtherWorkspaceCard';
+import { useOtherWorkspace } from '../hooks/useOtherWorkspace';
 import { onPageChangeBack, pushPage, replacePage, useBackClose } from '../lib/backStack';
 
 const SIDEBAR_KEY = 'agenda.sidebarCollapsed';
@@ -96,6 +98,7 @@ export default function Shell({ user }: { user: User }) {
     deletePlanned,
   } = useTasks(user.id, workspace);
   const prefs = usePrefs();
+  const otherWorkspace = useOtherWorkspace(user.id, workspace); // what's pending on the other side
   const switchWorkspace = useCallback((w: WorkspaceId) => {
     setWorkspaceState(w);
     try {
@@ -288,6 +291,7 @@ export default function Shell({ user }: { user: User }) {
         onOpenAssistant={() => setAssistantOpen(true)}
         workspace={workspace}
         onSwitchWorkspace={switchWorkspace}
+        otherAttention={otherWorkspace.items.length}
         archivedCount={archived.length}
         trashedCount={trashed.length}
         theme={prefs.theme}
@@ -341,6 +345,17 @@ export default function Shell({ user }: { user: User }) {
             focusTask={focusTask}
             openId={openTaskId}
             onOpenIdChange={setOpenTaskId}
+            notice={
+              <OtherWorkspaceCard
+                other={otherWorkspace.other}
+                items={otherWorkspace.items}
+                onOpen={(id) => {
+                  switchWorkspace(otherWorkspace.other);
+                  setOpenTaskId(id);
+                  setFocusTask({ id, nonce: Date.now() });
+                }}
+              />
+            }
             onAddTask={addTask}
             onToggle={toggleTask}
             onRename={renameTask}
