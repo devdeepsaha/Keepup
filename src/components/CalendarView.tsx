@@ -337,7 +337,7 @@ export default function CalendarView({ tasks, loading, initialDay, onToggle }: P
   return (
     <div className="mx-auto max-w-[1500px] px-4 pb-8 md:px-8 lg:px-10">
       {/* Pinned: the month, Today and the quick ranges stay put while you scroll */}
-      <div className="sticky top-0 z-20 -mx-4 mb-4 bg-[var(--bg-color)]/95 px-4 pt-2 pb-3 backdrop-blur md:-mx-8 md:px-8 lg:-mx-10 lg:px-10">
+      <div className="sticky top-12 z-10 -mx-4 mb-4 bg-[var(--bg-color)]/95 px-4 pt-2 pb-3 backdrop-blur md:-mx-8 md:px-8 lg:-mx-10 lg:px-10">
       <header className="mb-3 flex items-end justify-between gap-3">
         <div className="min-w-0">
           <div className="mb-1 font-display text-xs font-bold uppercase tracking-widest text-accent-gradient">Calendar</div>
@@ -376,7 +376,7 @@ export default function CalendarView({ tasks, loading, initialDay, onToggle }: P
           scrolls on its own, so the calendar never moves. */}
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] lg:items-start">
         {/* Calendar */}
-        <div className="rounded-2xl border border-[var(--line-color)] bg-[var(--surface)] p-2 shadow-sm sm:p-4 lg:sticky lg:top-[8.5rem]">
+        <div className="rounded-2xl border border-[var(--line-color)] bg-[var(--surface)] p-2 shadow-sm sm:p-4 lg:sticky lg:top-[11.5rem]">
           <CalendarData.Provider value={ctx}>
             <DayPicker
               mode="range"
@@ -438,7 +438,7 @@ export default function CalendarView({ tasks, loading, initialDay, onToggle }: P
         </div>
 
         {/* The selection's story */}
-        <aside className="rounded-2xl border border-[var(--line-color)] bg-[var(--surface)] p-4 shadow-sm sm:p-5 lg:sticky lg:top-[8.5rem] lg:max-h-[calc(100vh-10rem)] lg:overflow-y-auto">
+        <aside className="rounded-2xl border border-[var(--line-color)] bg-[var(--surface)] p-4 shadow-sm sm:p-5 lg:sticky lg:top-[11.5rem] lg:max-h-[calc(100vh-12.5rem)] lg:overflow-y-auto">
           <div className="mb-4">
             <div className="font-display text-[0.6875rem] uppercase tracking-widest text-[var(--text-muted)]">
               {single ? fmt(from, { year: 'numeric' }) : `${selected.length ? plural(selected.length, 'active day') : 'No activity'}`}
