@@ -65,7 +65,10 @@ export function attentionFor(task: Task, now: number, todayKey: string, scope?: 
       score: planned.send_on < todayKey ? 950 : 800,
     };
   if (due === 0) return { kind: 'due', label: 'Due today', tone: 'red', score: 900 };
-  // Rhythm tasks follow their weekly check-in schedule instead of the generic quiet/stale rule.
+  // Rhythm tasks follow their weekly check-in schedule, but a week rolling over never wipes the slate:
+  // a week or more without any update is red until you log one.
+  if (cadence && !waiting && quiet >= STALE_DAYS)
+    return { kind: 'stale', label: `${who}No update in ${quiet} days`, tone: 'red', score: 500 + quiet };
   if (cadence) {
     // A full ring is red here too, so the label always matches the ring.
     const label = `${who}${cadence.label}${waiting ? waitingFor : ''}`;
@@ -167,8 +170,17 @@ export function timerFor(task: Task, now: number, todayKey: string, scope?: Rhyt
         : quietDays >= QUIET_DAYS
           ? 'orange'
           : 'green';
+  // A week or more without any update is red and full, even if a new week's rhythm just started.
+  if (cadence && !waiting && quietDays >= STALE_DAYS) {
+    progress = 1;
+    tone = 'red';
+  }
   const parts = [
-    cadence ? cadence.label : quietDays === 0 ? 'Updated today' : `No update for ${quietDays} day${quietDays === 1 ? '' : 's'}`,
+    cadence && !(quietDays >= STALE_DAYS && !waiting)
+      ? cadence.label
+      : quietDays === 0
+        ? 'Updated today'
+        : `No update for ${quietDays} day${quietDays === 1 ? '' : 's'}`,
   ];
   if (waiting) parts.unshift(`Waiting on client${task.waiting_for ? `: ${task.waiting_for}` : ''}`);
 

@@ -108,13 +108,14 @@ export function cadenceFor(task: Task, todayKey: string, scope?: RhythmScope): C
   }
 
   // Nothing more fits this week (e.g. you just checked in and the rest of the week is off): nothing to act
-  // on until next week, so no alarm. Insights still count the missed one.
+  // on until next week, so no alarm if you checked in this week. A week with no check-in at all stays amber.
+  // Insights still count the missed ones.
   if (!nextFrom) {
     const nextWeek = workingOnOrAfter(shift(weekEnd, 1), shift(weekEnd, 7));
     return {
       ...base,
-      tone: 'green',
-      progress: 0,
+      tone: count ? 'green' : 'orange',
+      progress: count ? 0 : 0.75,
       label: `${count}/${target} this week (${remaining} missed). Next ${task.waiting_since ? 'nudge' : 'check-in'} ${nextWeek ? weekday(nextWeek) : 'next week'}`,
       nextFrom: null,
       latest: null,
