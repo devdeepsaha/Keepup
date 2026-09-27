@@ -329,6 +329,8 @@ export function createLiveOrb(
   // Wander: small glances around on its own. Glance: a short look toward a tap or a scroll.
   const coarse = window.matchMedia("(pointer: coarse)").matches
   let lastPointer = -10_000 // last mouse move
+  let usedMouse = false // once a mouse has moved, keep watching it for a while after it stops (even on touch laptops)
+  const MOUSE_HOLD_MS = 5000
   const wander = { x: 0, y: 0.08 }
   let nextSaccade = 0
   let glance: { x: number; y: number; until: number } | null = null
@@ -379,6 +381,7 @@ export function createLiveOrb(
       targetLook.x = t.x
       targetLook.y = t.y
       lastPointer = performance.now()
+      usedMouse = true
     } else {
       glance = { ...t, until: performance.now() + 900 } // a finger dragging: follow it briefly
     }
@@ -452,7 +455,7 @@ export function createLiveOrb(
     } else if (options.interactive && glance && now < glance.until) {
       look.x += (glance.x - look.x) * 0.2
       look.y += (glance.y - look.y) * 0.2
-    } else if (options.interactive && !reduce && now - lastPointer > (coarse ? 0 : 4000)) {
+    } else if (options.interactive && !reduce && now - lastPointer > (usedMouse ? MOUSE_HOLD_MS : coarse ? 0 : MOUSE_HOLD_MS)) {
       // No mouse (or it's resting): look around on its own, in quick glances with pauses between.
       if (now >= nextSaccade) {
         const r = Math.random()
@@ -576,13 +579,21 @@ export function LiveOrb({
   mood = null,
   readX = 0.5,
 }: LiveOrbProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const boxRef = useRef<HTMLDivElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const instanceRef = useRef<LiveOrbInstance | null>(null)
   const [hasGl, setHasGl] = useState(false)
 
   useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
+    const box = boxRef.current
+    if (!box) return
+    // A fresh canvas for every mount: destroy() hands the WebGL context back, and a canvas whose context was
+    // lost can't be used again (React mounting twice in development would otherwise leave Bouncy static).
+    const canvas = document.createElement("canvas")
+    canvas.className = "absolute inset-0 size-full"
+    canvas.style.visibility = "hidden"
+    box.appendChild(canvas)
+    canvasRef.current = canvas
     instanceRef.current = createLiveOrb(canvas, {
       variant,
       color,
@@ -595,9 +606,16 @@ export function LiveOrb({
     return () => {
       instanceRef.current?.destroy()
       instanceRef.current = null
+      canvas.remove()
+      canvasRef.current = null
     }
     // Engine reads live options via setOptions; mount once.
   }, [])
+
+  // Only show the canvas while WebGL works; otherwise the plain orb shows (never Chrome's broken-canvas face).
+  useEffect(() => {
+    if (canvasRef.current) canvasRef.current.style.visibility = hasGl ? "visible" : "hidden"
+  }, [hasGl])
 
   useEffect(() => {
     instanceRef.current?.setOptions({
@@ -618,6 +636,7 @@ export function LiveOrb({
 
   return (
     <div
+      ref={boxRef}
       data-slot="live-orb"
       role="img"
       aria-label="Orb character"
@@ -652,8 +671,6 @@ export function LiveOrb({
           />
         </div>
       ) : null}
-      {/* Only visible while WebGL works; otherwise the plain orb above shows (never Chrome's broken-canvas face). */}
-      <canvas ref={canvasRef} className={`absolute inset-0 size-full ${hasGl ? "" : "invisible"}`} />
     </div>
   )
 }

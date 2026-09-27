@@ -1,5 +1,19 @@
+import { useEffect, useState } from 'react';
 import type { View } from './Sidebar';
 import { LiveOrb } from './LiveOrb';
+
+// True on phone-width screens, where this bar shows: its Bouncy only exists there (no canvas spent on computers).
+function useIsPhone() {
+  const query = '(max-width: 767px)';
+  const [isPhone, setIsPhone] = useState(() => window.matchMedia(query).matches);
+  useEffect(() => {
+    const mq = window.matchMedia(query);
+    const onChange = () => setIsPhone(mq.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+  return isPhone;
+}
 
 // Phones: four quick destinations at the bottom of the screen, within thumb reach.
 
@@ -18,6 +32,7 @@ const ICONS = {
 };
 
 export default function MobileNav({ view, assistantOpen, attention, onNavigate, onOpenAssistant }: Props) {
+  const isPhone = useIsPhone();
   const item = (label: string, icon: string, active: boolean, onClick: () => void, badge = 0) => (
     <button
       key={label}
@@ -58,7 +73,7 @@ export default function MobileNav({ view, assistantOpen, attention, onNavigate, 
       >
         {/* The real Bouncy: its eyes look around, glance at taps, and blink */}
         <span className={`flex rounded-full shadow-md shadow-[#257ef4]/30 ${assistantOpen ? 'ring-2 ring-[var(--accent)] ring-offset-2 ring-offset-[var(--bg-color)]' : ''}`}>
-          <LiveOrb size={28} variant="custom" color="#257EF4" eyeColor="#FAFAFA" />
+          {isPhone && <LiveOrb size={28} variant="custom" color="#257EF4" eyeColor="#FAFAFA" />}
         </span>
         <span className={assistantOpen ? 'text-[var(--accent)]' : 'text-[var(--text-muted)]'}>Bouncy</span>
       </button>
