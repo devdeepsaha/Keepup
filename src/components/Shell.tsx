@@ -359,7 +359,7 @@ export default function Shell({ user }: { user: User }) {
       />
 
       {/* Tap-away backdrop for the expanded sidebar on small screens */}
-      {!collapsed && <div className="fixed inset-0 z-10 bg-black/10 md:hidden" onClick={toggleCollapsed} />}
+      {!collapsed && <div className="fixed inset-0 z-[35] bg-black/30 md:hidden" onClick={toggleCollapsed} />}
     </div>
     </ClientColorsProvider>
   );

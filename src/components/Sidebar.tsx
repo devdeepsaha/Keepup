@@ -474,15 +474,15 @@ export default function Sidebar({
 
   return (
     <aside
-      style={{ width: collapsed ? SIDEBAR_ICON_WIDTH : width }}
-      className={`fixed inset-y-0 left-0 z-20 flex flex-col border-r border-[var(--line-color)] bg-[var(--bg-color)] ${
+      style={{ width: collapsed ? SIDEBAR_ICON_WIDTH : `min(${width}px, 85vw)` }}
+      className={`fixed inset-y-0 left-0 z-20 max-md:z-40 flex flex-col border-r border-[var(--line-color)] bg-[var(--bg-color)] ${
         resizing ? '' : 'transition-[width,translate] duration-200 ease-linear'
       } ${collapsed ? 'max-md:-translate-x-full' : ''} ${
         collapsed ? '' : 'shadow-xl md:shadow-none'
       }`}
     >
       {/* Header: workspace switcher, as in sidebar-07's team switcher */}
-      <div className="relative p-2" ref={switcherRef}>
+      <div className="relative flex items-center gap-1 p-2" ref={switcherRef}>
         <button
           onClick={() => setSwitcher((v) => !v)}
           onDoubleClick={() => {
@@ -505,6 +505,16 @@ export default function Sidebar({
           )}
           <Tip collapsed={collapsed} label={`${WORKSPACES[workspace].name} · double-click to switch`} />
         </button>
+        {/* Phones: close the drawer */}
+        {!collapsed && (
+          <button
+            onClick={onToggleCollapsed}
+            aria-label="Close sidebar"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-[var(--text-muted)] hover:bg-[var(--surface)] hover:text-[var(--text-main)] cursor-pointer md:hidden"
+          >
+            <Icon d="M6 6l12 12M18 6L6 18" className="w-5 h-5" />
+          </button>
+        )}
         {switcher && (
           <div
             className={`absolute z-50 w-60 rounded-xl border border-[var(--line-color)] bg-[var(--surface)] py-1 text-sm shadow-xl ${
