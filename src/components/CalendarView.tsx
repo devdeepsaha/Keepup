@@ -113,7 +113,8 @@ function DayCell({ day, modifiers, className: _className, ...props }: DayButtonP
   const edge = modifiers.range_start || modifiers.range_end || (modifiers.selected && !modifiers.range_middle);
   const middle = modifiers.range_middle && !edge;
   const clients = info?.clients ?? [];
-  const extra = clients.length - 2;
+  const extra = clients.length - 2; // computers: two tiles, then "+n"
+  const crowded = clients.length > 2; // phones: one tile, then "+n", so the day fits its column
 
   return (
     <button
@@ -130,11 +131,23 @@ function DayCell({ day, modifiers, className: _className, ...props }: DayButtonP
         {day.date.getDate()}
       </span>
       {clients.length > 0 && (
-        <span className="flex items-center gap-[3px]">
-          {clients.slice(0, 2).map((c) => (
-            <Tile key={c.key} label={initials.get(c.key) ?? c.name[0]} color={colorOf(c.key)} state={c.state} onGradient={!!edge} />
+        <span className="flex max-w-full items-center justify-center gap-[2px] overflow-hidden sm:gap-[3px]">
+          {clients.slice(0, 2).map((c, i) => (
+            <span key={c.key} className={`flex ${i === 1 && crowded ? 'max-sm:hidden' : ''}`}>
+              <span className="sm:hidden">
+                <Tile label={initials.get(c.key) ?? c.name[0]} color={colorOf(c.key)} state={c.state} size={14} onGradient={!!edge} />
+              </span>
+              <span className="max-sm:hidden">
+                <Tile label={initials.get(c.key) ?? c.name[0]} color={colorOf(c.key)} state={c.state} onGradient={!!edge} />
+              </span>
+            </span>
           ))}
-          {extra > 0 && <span className={`font-display text-[0.5625rem] ${edge ? 'text-white/80' : 'text-[var(--text-muted)]'}`}>+{extra}</span>}
+          {crowded && (
+            <span className={`font-display text-[0.5625rem] leading-none ${edge ? 'text-white/80' : 'text-[var(--text-muted)]'}`}>
+              <span className="sm:hidden">+{clients.length - 1}</span>
+              <span className="max-sm:hidden">+{extra}</span>
+            </span>
+          )}
         </span>
       )}
       {!!info?.completed.length && (
@@ -341,7 +354,7 @@ export default function CalendarView({ tasks, loading, initialDay, onToggle }: P
       <header className="mb-3 flex items-end justify-between gap-3">
         <div className="min-w-0">
           <div className="mb-1 font-display text-xs font-bold uppercase tracking-widest text-accent-gradient">Calendar</div>
-          <h1 className="font-display text-3xl font-bold tracking-tight md:text-4xl">
+          <h1 className="font-display text-2xl font-bold tracking-tight sm:text-3xl md:text-4xl">
             {fmt(month, { month: 'long' })} <span className="text-[var(--text-muted)]">{month.getFullYear()}.</span>
           </h1>
         </div>
@@ -374,9 +387,9 @@ export default function CalendarView({ tasks, loading, initialDay, onToggle }: P
 
       {/* Calendar and the day's story share the width evenly; on big screens both fit the window and the story
           scrolls on its own, so the calendar never moves. */}
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] lg:items-start">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] lg:items-start">
         {/* Calendar */}
-        <div className="rounded-2xl border border-[var(--line-color)] bg-[var(--surface)] p-2 shadow-sm sm:p-4 lg:sticky lg:top-[11.5rem]">
+        <div className="min-w-0 overflow-hidden rounded-2xl border border-[var(--line-color)] bg-[var(--surface)] p-2 shadow-sm sm:p-4 lg:sticky lg:top-[11.5rem]">
           <CalendarData.Provider value={ctx}>
             <DayPicker
               mode="range"
