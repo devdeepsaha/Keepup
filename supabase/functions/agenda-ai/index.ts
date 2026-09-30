@@ -161,6 +161,19 @@ const newTaskCadence = (n: number | null, kind: SpaceInfo['kind']) =>
   n === 0 ? null : (validCadence(n) ?? (kind === 'work' ? DEFAULT_CADENCE : null));
 const clean = (s: string | null, max: number) => (s ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
 
+// ---------- saved links on client messages ----------
+// Every client message for a task with saved links ends with one "Link:" line, whether or not the model
+// remembered it: the Test link when the message talks about the test server, otherwise the Live one.
+type SavedLink = { label: string; url: string };
+function withLink(text: string, links?: SavedLink[] | null) {
+  if (!links?.length || /(^|\n)\s*link:/i.test(text)) return text;
+  const test = links.find((l) => /test|staging|dev/i.test(l.label));
+  const live = links.find((l) => /live|site|prod|main/i.test(l.label));
+  const mentionsTest = /\btest(ing)?\b|staging|test server|not live/i.test(text);
+  const pick = (mentionsTest && test) || live || test || links[0];
+  return `${text.trimEnd()}\nLink: ${pick.url}`;
+}
+
 // ---------- pacing planned client updates ----------
 // Date keys are plain calendar days (YYYY-MM-DD), handled in UTC so no timezone can shift them.
 const addDaysKey = (key: string, n: number) => new Date(Date.parse(key) + n * DAY_MS).toISOString().slice(0, 10);
@@ -444,16 +457,22 @@ async function applyActions(
 
     if (a.type === 'plan_updates') {
       // Target: the referenced task, an existing task with this title, or a new one.
-      let target: { id: string; text: string; cadence: number | null; due: string | null } | null = task
-        ? { id: task.id, text: task.text, cadence: task.cadence_per_week, due: task.due_date }
+      let target: { id: string; text: string; cadence: number | null; due: string | null; links?: SavedLink[] } | null = task
+        ? { id: task.id, text: task.text, cadence: task.cadence_per_week, due: task.due_date, links: task.links }
         : null;
       let created = false;
       if (!target) {
         const title = clean(a.text, 500);
         const same = title ? existing.get(titleKey(title)) : undefined;
         if (same) {
-          const { data } = await db.from('tasks').select('cadence_per_week, due_date').eq('id', same.id).single();
-          target = { id: same.id, text: same.text, cadence: data?.cadence_per_week ?? DEFAULT_CADENCE, due: data?.due_date ?? null };
+          const { data } = await db.from('tasks').select('cadence_per_week, due_date, links').eq('id', same.id).single();
+          target = {
+            id: same.id,
+            text: same.text,
+            cadence: data?.cadence_per_week ?? DEFAULT_CADENCE,
+            due: data?.due_date ?? null,
+            links: (data?.links as SavedLink[] | null) ?? [],
+          };
         } else if (title) {
           const { data, error } = await db
             .from('tasks')
@@ -495,7 +514,13 @@ async function applyActions(
       const pinned = new Set(parts.filter((p) => p.on).map((p) => p.on!));
       const dates = scheduleParts(parts.filter((p) => !p.on).length, clock.today, target.cadence, target.due, pinned);
       let next = 0;
-      const rows = parts.map((p, i) => ({ task_id: target!.id, send_on: p.on ?? dates[next++], title: p.title, text: p.text, position: i }));
+      const rows = parts.map((p, i) => ({
+        task_id: target!.id,
+        send_on: p.on ?? dates[next++],
+        title: p.title,
+        text: withLink(p.text, target!.links),
+        position: i,
+      }));
       const { data: inserted, error } = await db.from('planned_updates').insert(rows).select('id, send_on');
       if (error || !inserted) {
         skip(target.text, error?.message ?? 'could not save the plan');
@@ -983,7 +1008,7 @@ async function handle(req: Request): Promise<Response> {
   const draftTask = output.draft?.task_ref ? refs.get(output.draft.task_ref.trim().toUpperCase()) : undefined;
   const draft =
     output.draft && typeof output.draft.text === 'string' && output.draft.text.trim()
-      ? { taskId: draftTask?.id ?? null, title: draftTask?.text ?? null, text: output.draft.text.trim() }
+      ? { taskId: draftTask?.id ?? null, title: draftTask?.text ?? null, text: withLink(output.draft.text.trim(), draftTask?.links) }
       : null;
   const tEnd = Date.now();
   const meta = {
