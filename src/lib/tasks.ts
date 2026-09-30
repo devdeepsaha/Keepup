@@ -69,19 +69,16 @@ export function attentionFor(task: Task, now: number, todayKey: string, scope?: 
   // a week or more without any update is red until you log one.
   if (cadence && !waiting && quiet >= STALE_DAYS)
     return { kind: 'stale', label: `${who}No update in ${quiet} days`, tone: 'red', score: 500 + quiet };
+  // Needs attention means missed or late, not "due soon": a check-in still on time this week, a deadline
+  // tomorrow, or a few quiet days stay in progress (their ring still fills up as time runs out).
   if (cadence) {
-    // A full ring is red here too, so the label always matches the ring.
+    if (!cadence.missed) return null;
     const label = `${who}${cadence.label}${waiting ? waitingFor : ''}`;
-    if (cadence.tone === 'red' || cadence.progress >= 0.999) return { kind: 'cadence', label, tone: 'red', score: 600 };
-    if (due === 1) return { kind: 'due', label: 'Due tomorrow', tone: 'orange', score: 400 };
-    if (cadence.tone === 'orange') return { kind: 'cadence', label, tone: 'orange', score: 300 };
-    return null;
+    return { kind: 'cadence', label, tone: cadence.tone === 'red' ? 'red' : 'orange', score: cadence.tone === 'red' ? 600 : 300 };
   }
   // Waiting on the client: the quiet/stale timer is paused (it's not your delay).
-  if (waiting) return due === 1 ? { kind: 'due', label: 'Due tomorrow', tone: 'orange', score: 400 } : null;
+  if (waiting) return null;
   if (quiet >= STALE_DAYS) return { kind: 'stale', label: `No update in ${quiet} days`, tone: 'red', score: 500 + quiet };
-  if (due === 1) return { kind: 'due', label: 'Due tomorrow', tone: 'orange', score: 400 };
-  if (quiet >= QUIET_DAYS) return { kind: 'stale', label: `${quiet} days quiet`, tone: 'orange', score: 100 + quiet };
   return null;
 }
 

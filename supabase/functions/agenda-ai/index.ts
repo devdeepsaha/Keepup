@@ -271,10 +271,12 @@ function buildContext(
     if (t.links?.length) parts.push(`links: ${t.links.map((l) => `${l.label} ${l.url}`).join(', ')}`);
     const plan = (t.planned_updates ?? []).filter((p) => p.status === 'planned').sort((a, b) => a.send_on.localeCompare(b.send_on));
     if (plan.length) {
-      parts.push(`PLANNED CLIENT UPDATES (not sent yet): ${plan.map((p) => `${weekdayOf(p.send_on)} ${p.send_on} "${p.title}"`).join(', ')}`);
-      // The one due now, in full: a draft for this client should be this message.
-      const dueNow = plan.find((p) => p.send_on <= clock.today);
-      if (dueNow) parts.push(`DUE NOW, planned message "${dueNow.title}": ${dueNow.text.replace(/\s+/g, ' ')}`);
+      // Every planned message in full (line breaks shown as " / "), so they can be rewritten or merged.
+      parts.push(
+        `PLANNED CLIENT UPDATES (not sent yet, in order): ${plan
+          .map((p, i) => `[${i + 1}] ${weekdayOf(p.send_on)} ${p.send_on}${p.send_on <= clock.today ? ' DUE NOW' : ''} "${p.title}": ${p.text.replace(/\s*\n\s*/g, ' / ').replace(/[ \t]+/g, ' ')}`)
+          .join(' || ')}`,
+      );
     }
     const logs = [...t.task_updates]
       .sort((a, b) => b.created_at.localeCompare(a.created_at))

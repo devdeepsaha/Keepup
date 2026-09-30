@@ -26,6 +26,7 @@ export interface CadenceState {
   checkIns: string[]; // day keys that counted this week
   tone: 'green' | 'orange' | 'red';
   progress: number; // 0..1, how much of the window for the next check-in has run out
+  missed?: boolean; // behind: a check-in this week was missed (not merely due soon)
   label: string; // why it's this colour
   nextFrom: string | null; // earliest working day the next check-in counts (null when complete or impossible)
   latest: string | null; // last working day the next check-in can happen and still fit the week
@@ -116,6 +117,7 @@ export function cadenceFor(task: Task, todayKey: string, scope?: RhythmScope): C
       ...base,
       tone: count ? 'green' : 'orange',
       progress: count ? 0 : 0.75,
+      missed: count === 0, // a whole week without a check-in
       label: `${count}/${target} this week (${remaining} missed). Next ${task.waiting_since ? 'nudge' : 'check-in'} ${nextWeek ? weekday(nextWeek) : 'next week'}`,
       nextFrom: null,
       latest: null,
@@ -128,6 +130,7 @@ export function cadenceFor(task: Task, todayKey: string, scope?: RhythmScope): C
       ...base,
       tone: 'red',
       progress: 1,
+      missed: true,
       label: `${count}/${target} this week. Behind; ${verb.toLowerCase()} as soon as you can`,
       nextFrom,
       latest,
