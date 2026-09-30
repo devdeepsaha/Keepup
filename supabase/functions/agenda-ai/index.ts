@@ -91,6 +91,7 @@ interface TaskRow {
   waiting_since?: string | null;
   waiting_for?: string | null;
   planned_updates?: { send_on: string; title: string; text: string; status: string }[];
+  links?: { label: string; url: string }[];
 }
 
 interface PlannedRow {
@@ -111,10 +112,11 @@ type Undo =
   | { type: 'rename'; taskId: string; text: string }
   | { type: 'set_cadence'; taskId: string; perWeek: number | null }
   | { type: 'set_waiting'; taskId: string; since: string | null; waitingFor: string | null }
+  | { type: 'set_links'; taskId: string; links: { label: string; url: string }[] }
   | { type: 'replace_planned'; taskId: string; ids: string[]; restore: PlannedRow[]; deleteTask?: boolean };
 
 interface Result {
-  kind: 'added' | 'logged' | 'completed' | 'reopened' | 'due' | 'renamed' | 'rhythm' | 'waiting' | 'planned' | 'skipped';
+  kind: 'added' | 'logged' | 'completed' | 'reopened' | 'due' | 'renamed' | 'rhythm' | 'waiting' | 'planned' | 'link' | 'skipped';
   title: string;
   detail: string | null;
   undo: Undo | null;
@@ -266,6 +268,7 @@ function buildContext(
         }`,
       );
     }
+    if (t.links?.length) parts.push(`links: ${t.links.map((l) => `${l.label} ${l.url}`).join(', ')}`);
     const plan = (t.planned_updates ?? []).filter((p) => p.status === 'planned').sort((a, b) => a.send_on.localeCompare(b.send_on));
     if (plan.length) {
       parts.push(`PLANNED CLIENT UPDATES (not sent yet): ${plan.map((p) => `${weekdayOf(p.send_on)} ${p.send_on} "${p.title}"`).join(', ')}`);
@@ -605,6 +608,29 @@ async function applyActions(
           });
         break;
       }
+      case 'set_link': {
+        // Save a site link on the task: text = the address, note = its label (Live, Test…).
+        const raw = clean(a.text, 300);
+        const withScheme = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+        let url: string | null = null;
+        try {
+          const u = new URL(withScheme);
+          if (u.hostname.includes('.')) url = u.toString().replace(/\/$/, '');
+        } catch {
+          url = null;
+        }
+        if (!url) {
+          skip(task.text, "that doesn't look like a web address");
+          break;
+        }
+        const label = clean(a.note, 20) || 'Live';
+        const before = task.links ?? [];
+        const links = [...before.filter((l) => l.label.toLowerCase() !== label.toLowerCase()), { label, url }].slice(0, 6);
+        const { error } = await db.from('tasks').update({ links }).eq('id', task.id);
+        if (error) skip(task.text, error.message);
+        else results.push({ kind: 'link', title: task.text, detail: `${label}: ${url}`, undo: { type: 'set_links', taskId: task.id, links: before } });
+        break;
+      }
       case 'set_cadence': {
         const perWeek = validCadence(a.cadence_per_week);
         if (perWeek === task.cadence_per_week) break;
@@ -888,7 +914,7 @@ async function handle(req: Request): Promise<Response> {
   const { data: tasks, error: tasksError } = await db
     .from('tasks')
     .select(
-      'id, text, done, completed_at, due_date, cadence_per_week, waiting_since, waiting_for, workspace, last_updated, created_at, task_updates (id, text, created_at), planned_updates (send_on, title, text, status)',
+      'id, text, done, completed_at, due_date, cadence_per_week, waiting_since, waiting_for, workspace, links, last_updated, created_at, task_updates (id, text, created_at), planned_updates (send_on, title, text, status)',
     )
     .is('deleted_at', null)
     .is('archived_at', null)

@@ -88,6 +88,7 @@ export default function Shell({ user }: { user: User }) {
     setCadence,
     setHandle,
     setClient,
+    setLinks,
     setWaiting,
     deleteTask,
     restoreTask,
@@ -367,6 +368,7 @@ export default function Shell({ user }: { user: User }) {
             onSetCadence={setCadence}
             onSetHandle={setHandle}
             onSetClient={setClient}
+            onSetLinks={setLinks}
             onSetWaiting={setWaiting}
             onDelete={deleteTask}
             onArchive={(id) => archiveTask(id, true)}

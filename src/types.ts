@@ -23,6 +23,12 @@ export interface Task {
   created_at: string;
   task_updates: TaskUpdate[];
   planned_updates?: PlannedUpdate[]; // client updates planned for later check-in days
+  links?: TaskLink[]; // saved site links (Live, Test…)
+}
+
+export interface TaskLink {
+  label: string; // "Live", "Test", or your own
+  url: string;
 }
 
 // A client update planned for a later day (finished work shared in parts).

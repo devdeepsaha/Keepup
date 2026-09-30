@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import type { PlannedUpdate, Task } from '../types';
+import type { PlannedUpdate, Task, TaskLink } from '../types';
 import { daysSince, daysUntilDue, timerFor, urgencyType, type Attention } from '../lib/tasks';
 import { keyToDate } from '../lib/dates';
 import { CADENCE_OPTIONS, CADENCE_RULE, cadenceFor, cadenceName } from '../lib/cadence';
 import { cleanHandle, clientKeyOf, type RhythmScope } from '../lib/handles';
 import TimerRing from './TimerRing';
 import PlannedUpdates from './PlannedUpdates';
+import TaskLinks, { LinkChips } from './TaskLinks';
 import ActionSheet, { SHEET_ICONS } from './ActionSheet';
 import { useLongPress } from '../lib/useLongPress';
 import { useBackClose } from '../lib/backStack';
@@ -29,6 +30,7 @@ interface Props {
   onSetCadence: (id: string, perWeek: number | null) => void;
   onSetHandle: (id: string, handle: string | null) => void;
   onSetClient: (id: string, client: string | null) => void;
+  onSetLinks?: (id: string, links: TaskLink[]) => void;
   onSetWaiting: (id: string, waitingFor: string | null, waiting: boolean, since?: string | null) => void;
   onDelete: (id: string) => void; // moves it to the trash (restorable for 30 days)
   onArchive: (id: string) => void;
@@ -58,6 +60,7 @@ export default function TaskItem({
   onSetCadence,
   onSetHandle,
   onSetClient,
+  onSetLinks,
   onSetWaiting,
   onDelete,
   onArchive,
@@ -436,6 +439,12 @@ export default function TaskItem({
                     {' · '}
                     <span className="underline underline-offset-2">{showSettings ? 'Done' : 'Edit'}</span>
                   </button>
+                  {!!task.links?.length && (
+                    <>
+                      {' · '}
+                      <LinkChips links={task.links} />
+                    </>
+                  )}
 
                   {showSettings && (
                     <div className="mt-2.5 flex flex-wrap items-center gap-x-6 gap-y-2">
@@ -512,6 +521,8 @@ export default function TaskItem({
                           className="w-28 bg-transparent border-b border-[var(--line-color)] focus:border-[var(--text-main)] outline-none text-[var(--text-main)] py-0.5 clean-input"
                         />
                       </label>
+
+                      {onSetLinks && <TaskLinks links={task.links ?? []} onChange={(links) => onSetLinks(task.id, links)} />}
 
                       {/* Blocked on the client: pauses the quiet timer; check-in days become nudges. */}
                       <div className="flex basis-full flex-wrap items-center gap-2">

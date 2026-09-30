@@ -2,10 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DEFAULT_CADENCE } from '../lib/cadence';
 import { dayKey } from '../lib/dates';
 import { supabase } from '../lib/supabase';
-import type { PlannedUpdate, Task, TaskUpdate, Workspace } from '../types';
+import type { PlannedUpdate, Task, TaskLink, TaskUpdate, Workspace } from '../types';
 
 const SELECT =
-  'id, text, done, completed_at, due_date, cadence_per_week, handle, client, waiting_since, waiting_for, workspace, archived_at, deleted_at, last_updated, created_at, task_updates (id, task_id, text, created_at), planned_updates (id, task_id, send_on, title, text, position, status, sent_at)';
+  'id, text, done, completed_at, due_date, cadence_per_week, handle, client, waiting_since, waiting_for, workspace, archived_at, deleted_at, links, last_updated, created_at, task_updates (id, task_id, text, created_at), planned_updates (id, task_id, send_on, title, text, position, status, sent_at)';
 
 export const TRASH_DAYS = 30;
 
@@ -149,6 +149,14 @@ export function useTasks(userId: string, workspace: Workspace, kind: 'work' | 'p
     [commit, setTasks],
   );
 
+  const setLinks = useCallback(
+    (id: string, links: TaskLink[]) => {
+      setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, links } : t)));
+      return commit(supabase.from('tasks').update({ links }).eq('id', id));
+    },
+    [commit, setTasks],
+  );
+
   const setClient = useCallback(
     (id: string, client: string | null) => {
       setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, client } : t)));
@@ -281,6 +289,7 @@ export function useTasks(userId: string, workspace: Workspace, kind: 'work' | 'p
     setCadence,
     setHandle,
     setClient,
+    setLinks,
     setWaiting,
     deleteTask,
     restoreTask,

@@ -11,6 +11,7 @@ export type Undo =
   | { type: 'rename'; taskId: string; text: string }
   | { type: 'set_cadence'; taskId: string; perWeek: number | null }
   | { type: 'set_waiting'; taskId: string; since: string | null; waitingFor: string | null }
+  | { type: 'set_links'; taskId: string; links: { label: string; url: string }[] }
   | {
       type: 'replace_planned';
       taskId: string;
@@ -20,7 +21,7 @@ export type Undo =
     };
 
 export interface AiResult {
-  kind: 'added' | 'logged' | 'completed' | 'reopened' | 'due' | 'renamed' | 'rhythm' | 'waiting' | 'planned' | 'skipped';
+  kind: 'added' | 'logged' | 'completed' | 'reopened' | 'due' | 'renamed' | 'rhythm' | 'waiting' | 'planned' | 'link' | 'skipped';
   title: string;
   detail: string | null;
   undo: Undo | null;
@@ -138,6 +139,8 @@ export async function undoResult(undo: Undo) {
       return check(await tasks.update({ cadence_per_week: undo.perWeek }).eq('id', undo.taskId));
     case 'set_waiting':
       return check(await tasks.update({ waiting_since: undo.since, waiting_for: undo.waitingFor }).eq('id', undo.taskId));
+    case 'set_links':
+      return check(await tasks.update({ links: undo.links }).eq('id', undo.taskId));
     case 'replace_planned':
       // Back to the plan that was there before (or no task at all, if the plan created it).
       if (undo.deleteTask) return check(await tasks.delete().eq('id', undo.taskId));

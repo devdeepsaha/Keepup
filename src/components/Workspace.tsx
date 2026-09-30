@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import type { PlannedUpdate, Task } from '../types';
+import type { PlannedUpdate, Task, TaskLink } from '../types';
 import { dayKey } from '../lib/dates';
 import { attentionFor, byDueThenOldest, useNow, type Attention } from '../lib/tasks';
 import { rhythmScopes, taskHandles } from '../lib/handles';
@@ -25,6 +25,7 @@ interface Props {
   onAskAbout?: (handle: string) => void;
   onAddUpdate: (id: string, text: string) => void;
   onDeleteUpdate: (taskId: string, updateId: string) => void;
+  onSetLinks?: (id: string, links: TaskLink[]) => void;
   onMarkPlannedSent: (taskId: string, update: PlannedUpdate) => void;
   onMovePlanned: (taskId: string, update: PlannedUpdate, sendOn: string) => void;
   onDeletePlanned: (taskId: string, update: PlannedUpdate) => void;
