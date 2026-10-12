@@ -62,6 +62,8 @@ export function OrgProvider({ user, children }: { user: User; children: ReactNod
   const [members, setMembers] = useState<Member[]>([]);
   const [access, setAccess] = useState<AccessRow[]>([]);
   const [ready, setReady] = useState(false);
+  // The admin also gets everyone's email, so people who haven't set a name yet still show as someone.
+  const [emailNames, setEmailNames] = useState<Map<string, string>>(new Map());
 
   const refresh = useCallback(async () => {
     const [m, a] = await Promise.all([
@@ -70,6 +72,9 @@ export function OrgProvider({ user, children }: { user: User; children: ReactNod
     ]);
     if (m.data) setMembers(m.data as Member[]);
     if (a.data) setAccess(a.data as AccessRow[]);
+    // (Returns nothing for anyone but the admin.)
+    const { data: emails } = await supabase.rpc('org_emails');
+    if (emails) setEmailNames(new Map((emails as { user_id: string; email: string }[]).map((e) => [e.user_id, nameFromEmail(e.email)])));
   }, []);
 
   // Signing in marks an invite as accepted and saves the name given at sign-up (or in the invite).
@@ -100,7 +105,7 @@ export function OrgProvider({ user, children }: { user: User; children: ReactNod
         .filter((a) => a.viewer_id === user.id && byId.has(a.subject_id))
         .map((a) => ({ member: byId.get(a.subject_id)!, level: a.level }));
     } else people = [];
-    people.sort((a, b) => (a.member.display_name ?? '').localeCompare(b.member.display_name ?? ''));
+    people.sort((a, b) => (a.member.display_name || emailNames.get(a.member.user_id) || '').localeCompare(b.member.display_name || emailNames.get(b.member.user_id) || ''));
     const levels = new Map(people.map((p) => [p.member.user_id, p.level]));
     return {
       ready,
@@ -114,7 +119,7 @@ export function OrgProvider({ user, children }: { user: User; children: ReactNod
       nameOf: (id) => {
         if (!id) return 'Someone';
         if (id === user.id) return 'You';
-        return byId.get(id)?.display_name || 'A colleague';
+        return byId.get(id)?.display_name || emailNames.get(id) || 'A colleague';
       },
       levelFor: (id) => levels.get(id) ?? null,
       refresh,
@@ -127,7 +132,7 @@ export function OrgProvider({ user, children }: { user: User; children: ReactNod
         return null;
       },
     };
-  }, [members, access, ready, user.id, refresh]);
+  }, [members, access, ready, user.id, refresh, emailNames]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

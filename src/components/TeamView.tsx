@@ -102,8 +102,8 @@ export default function TeamView({ userId, onOpenPerson }: { userId: string; onO
         };
       })
       .filter((r) => !clientTasks || r.open.length || r.pending)
-      .sort((a, b) => b.attention.length - a.attention.length || a.person.member.display_name!.localeCompare(b.person.member.display_name ?? ''));
-  }, [tasks, org.people, client, clients, now, todayKey, weekStart]);
+      .sort((a, b) => b.attention.length - a.attention.length || org.nameOf(a.person.member.user_id).localeCompare(org.nameOf(b.person.member.user_id)));
+  }, [tasks, org, client, clients, now, todayKey, weekStart]);
 
   // Founders: appoint managers among their people and decide what each manager sees.
   const founderOnly = org.isFounder && !org.isAdmin;
@@ -177,7 +177,7 @@ export default function TeamView({ userId, onOpenPerson }: { userId: string; onO
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {rows.map((r) => {
-          const name = r.person.member.display_name || 'A colleague';
+          const name = org.nameOf(r.person.member.user_id);
           const roles = r.person.member.roles.filter((x) => x !== 'member');
           return (
             <div key={r.person.member.user_id} className="flex flex-col rounded-xl border border-[var(--line-color)] bg-[var(--surface)]">
