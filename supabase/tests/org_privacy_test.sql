@@ -118,7 +118,7 @@ select pg_temp.expect('admin cannot read others'' chat messages', (select count(
 select pg_temp.expect('admin sees Mint-more logs, not Personal logs', (select string_agg(text, ',' order by text) = 'L:X-mint' from public.task_updates where text like 'L:%'), (select string_agg(text, ',') from public.task_updates where text like 'L:%'));
 
 select pg_temp.act('aaaaaaaa-0000-4000-8000-000000000001', false);
-select pg_temp.expect('the live site''s old code (no header) still only sees its own', pg_temp.seen() = 'T:A-mint,T:A-personal', pg_temp.seen());
+select pg_temp.expect('without the app marker the rules are the same (016: no rollout switch)', pg_temp.seen() = 'T:A-mint,T:A-personal,T:F-mint,T:M-mint,T:X-mint,T:Y-mint,T:Z-mint', pg_temp.seen());
 
 select pg_temp.act('aaaaaaaa-0000-4000-8000-000000000002');
 select pg_temp.expect('founder: own + only the granted people''s Mint-more (not admin, not Z)', pg_temp.seen() = 'T:F-mint,T:X-mint,T:Y-mint', pg_temp.seen());

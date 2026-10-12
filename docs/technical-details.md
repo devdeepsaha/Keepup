@@ -44,16 +44,17 @@ The database checks every request against these rules, so the app can't show mor
   - `org_emails`: emails and last sign-in, admin only.
 - **New accounts:** a sign-up trigger (`handle_new_user`) adds every new account as a member. If they were invited, the invite's name and roles are used.
 
-## Rollout safety switch
-- Until the new app is live, shared rows only reach requests carrying the header `x-keepup-org: 1`, which only the new app sends. The current live site therefore behaves exactly as before. Bouncy's team view is switched on the same way.
-- After the push, migration `016_org_live.sql` removes the switch.
+## Rollout history
+- **Before launch:** shared rows only reached requests carrying the header `x-keepup-org: 1`, which only the new app sends, so the old live site kept working unchanged.
+- **At launch (Oct 12, 2026):** after Vercel deployed the new app, migration `016_org_live.sql` removed that switch. The sharing rules now apply to every request.
+- **Still in place:** Bouncy's team view only loads for requests from the app (which sends `x-keepup-org: 1`).
 
 ## Files
 | Where | What |
 |---|---|
 | `supabase/migrations/014_org.sql` | Company tables, `is_admin`, `can_see`, admin bootstrap |
 | `supabase/migrations/015_org_policies.sql` | Sharing rules, guards, notices, company functions |
-| `supabase/migrations/016_org_live.sql` | Removes the rollout switch (apply after the push) |
+| `supabase/migrations/016_org_live.sql` | Removed the rollout switch (applied at launch) |
 | `supabase/tests/org_privacy_test.sql` | Automated privacy test (47 checks; everything rolled back) |
 | `supabase/functions/org/` | Invite / remove server function |
 | `supabase/functions/agenda-ai/` | Bouncy, including team mode (`loadTeam`) |

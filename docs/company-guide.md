@@ -132,13 +132,17 @@ calling the database directly gets nothing they aren't allowed to see.
   `org` server function. Before it acts, it asks the database whether you're allowed. The secret server key never
   leaves Supabase.
 
-## Going live (not done yet)
+## Status: live
 
-The database and server functions are already updated. They were made so that **the live site keeps working
-exactly as before**: colleagues' work is only shared with this new version of the app. To launch:
-1. Say "push". The new app goes to GitHub and Vercel deploys it to keepup.devdeepsaha.in.
-2. Then I apply `016_org_live.sql`, which removes that temporary safety switch.
-3. Set roles and access in Admin, then invite people a few at a time.
+The company version has been live on **keepup.devdeepsaha.in** since October 12, 2026.
+- The database sharing rules, the `org` server function and Bouncy's team mode are all running.
+- The privacy test passed all 47 checks again after launch.
 
-Rishav's account, already in Keepup, is a **member** who can't see anyone yet. They'll be asked for their name the next
-time he signs in.
+Next steps for the admin:
+1. Open **Admin** and set roles: who is a founder, who is a manager.
+2. In **Who sees whom**, give each founder their people.
+3. Invite everyone, a few at a time (the email limit is a few per hour).
+4. Hand out the **Keepup employee guide** so everyone knows how it works.
+
+Right now Keepup has two accounts: Devdeep (Admin, Founder, Member) and Rishav (Member). Rishav will be asked for a
+name the next time they sign in.
