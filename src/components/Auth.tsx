@@ -7,6 +7,7 @@ type Mode = 'signin' | 'signup';
 export default function Auth() {
   const [mode, setMode] = useState<Mode>('signin');
   const [email, setEmail] = useState('');
+  const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -26,7 +27,7 @@ export default function Auth() {
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: { emailRedirectTo: window.location.origin },
+        options: { emailRedirectTo: window.location.origin, data: { display_name: name.trim() } },
       });
       if (error) setError(error.message);
       else if (!data.session) setNotice('Check your inbox to confirm your email, then sign in.');
@@ -62,6 +63,21 @@ export default function Auth() {
       </header>
 
       <form onSubmit={handleSubmit} className="max-w-xl space-y-8">
+        {mode === 'signup' && (
+          <label className="block relative group">
+            <span className="block text-xs uppercase tracking-widest font-display text-[var(--text-muted)]">Your name</span>
+            <input
+              required
+              autoComplete="name"
+              maxLength={60}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="How colleagues will see you"
+              className={inputClass}
+            />
+            <div className="absolute left-0 bottom-0 w-full h-[2px] bg-[var(--line-color)] transition-all duration-500 group-focus-within:bg-[image:var(--accent-gradient)]" />
+          </label>
+        )}
         <label className="block relative group">
           <span className="block text-xs uppercase tracking-widest font-display text-[var(--text-muted)]">Email</span>
           <input

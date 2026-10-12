@@ -24,6 +24,10 @@ export interface Task {
   task_updates: TaskUpdate[];
   planned_updates?: PlannedUpdate[]; // client updates planned for later check-in days
   links?: TaskLink[]; // saved site links (Live, Test…)
+  user_id?: string; // whose task it is
+  assigned_by?: string | null; // a founder or manager who gave it to its owner
+  assignment_status?: 'pending' | 'accepted' | 'declined' | null; // the owner's answer
+  assignment_note?: string | null; // why they declined
 }
 
 export interface TaskLink {

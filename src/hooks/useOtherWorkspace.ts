@@ -6,7 +6,7 @@ import { dayKey } from '../lib/dates';
 import type { Task, Workspace } from '../types';
 
 const SELECT =
-  'id, text, done, completed_at, due_date, cadence_per_week, handle, client, waiting_since, waiting_for, workspace, archived_at, deleted_at, last_updated, created_at, task_updates (id, task_id, text, created_at), planned_updates (id, task_id, send_on, title, text, position, status, sent_at)';
+  'id, user_id, assigned_by, assignment_status, assignment_note, text, done, completed_at, due_date, cadence_per_week, handle, client, waiting_since, waiting_for, workspace, archived_at, deleted_at, last_updated, created_at, task_updates (id, task_id, text, created_at), planned_updates (id, task_id, send_on, title, text, position, status, sent_at)';
 
 export interface OtherItem {
   task: Task;

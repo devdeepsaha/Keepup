@@ -8,9 +8,9 @@ import { keyToDate } from '../lib/dates';
 interface Props {
   planned: PlannedUpdate[]; // not sent yet
   todayKey: string;
-  onMarkSent: (update: PlannedUpdate) => void;
-  onMove: (update: PlannedUpdate, sendOn: string) => void;
-  onDelete: (update: PlannedUpdate) => void;
+  onMarkSent?: (update: PlannedUpdate) => void; // only the task's owner sends
+  onMove?: (update: PlannedUpdate, sendOn: string) => void; // the owner or a planner
+  onDelete?: (update: PlannedUpdate) => void;
 }
 
 const dayLabel = (key: string, todayKey: string) => {
@@ -80,6 +80,7 @@ export default function PlannedUpdates({ planned, todayKey, onMarkSent, onMove, 
                     >
                       {copied === u.id ? 'Copied ✓' : 'Copy'}
                     </button>
+                    {onMarkSent && (
                     <button
                       type="button"
                       onClick={() => onMarkSent(u)}
@@ -88,6 +89,8 @@ export default function PlannedUpdates({ planned, todayKey, onMarkSent, onMove, 
                     >
                       Mark sent
                     </button>
+                    )}
+                    {onMove && (
                     <label className="flex items-center gap-1.5 text-[var(--text-muted)]">
                       Move to
                       <input
@@ -98,6 +101,8 @@ export default function PlannedUpdates({ planned, todayKey, onMarkSent, onMove, 
                         className="bg-transparent text-[var(--text-main)] outline-none"
                       />
                     </label>
+                    )}
+                    {onDelete && (
                     <button
                       type="button"
                       onClick={() => onDelete(u)}
@@ -105,6 +110,7 @@ export default function PlannedUpdates({ planned, todayKey, onMarkSent, onMove, 
                     >
                       Remove
                     </button>
+                    )}
                   </div>
                 </div>
               )}

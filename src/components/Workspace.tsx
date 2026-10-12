@@ -4,6 +4,7 @@ import { dayKey } from '../lib/dates';
 import { attentionFor, byDueThenOldest, useNow, type Attention } from '../lib/tasks';
 import { rhythmScopes, taskHandles } from '../lib/handles';
 import TaskItem from './TaskItem';
+import AssignmentCard from './AssignmentCard';
 
 interface Props {
   tasks: Task[];
@@ -29,6 +30,11 @@ interface Props {
   onMarkPlannedSent: (taskId: string, update: PlannedUpdate) => void;
   onMovePlanned: (taskId: string, update: PlannedUpdate, sendOn: string) => void;
   onDeletePlanned: (taskId: string, update: PlannedUpdate) => void;
+  // A colleague's list (founders and managers): plan = edit and assign, view = read only.
+  mode?: 'own' | 'plan' | 'view';
+  personName?: string; // whose list it is, when it isn't yours
+  onAnswer?: (id: string, accept: boolean, note: string | null) => void; // accept or decline an assigned task
+  footer?: ReactNode; // e.g. declined assignments, on a colleague's list
 }
 
 interface Entry {
@@ -39,7 +45,24 @@ interface Entry {
 const greeting = (hour: number) => (hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening');
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
-export default function Workspace({ tasks, loading, focusTask, openId, onOpenIdChange, notice, onAddTask, onToggle, ...itemHandlers }: Props) {
+export default function Workspace({
+  tasks: allTasks,
+  loading,
+  focusTask,
+  openId,
+  onOpenIdChange,
+  notice,
+  onAddTask,
+  onToggle,
+  mode = 'own',
+  personName,
+  onAnswer,
+  footer,
+  ...itemHandlers
+}: Props) {
+  // Assigned to you and not answered yet: they wait at the top until you accept (or decline) them.
+  const pendingMine = mode === 'own' ? allTasks.filter((t) => t.assignment_status === 'pending' && !t.done) : [];
+  const tasks = pendingMine.length ? allTasks.filter((t) => !pendingMine.includes(t)) : allTasks;
   const now = useNow();
   const today = new Date(now);
   const todayKey = dayKey(today);
@@ -96,10 +119,17 @@ export default function Workspace({ tasks, loading, focusTask, openId, onOpenIdC
     .filter((e) => !e.attention && e.task.waiting_since)
     .sort((a, b) => a.task.waiting_since!.localeCompare(b.task.waiting_since!));
 
-  const isFirstRun = !loading && tasks.length === 0;
+  const isFirstRun = !loading && tasks.length === 0 && !pendingMine.length;
+  const others = mode !== 'own';
 
   let headline: string;
   if (loading) headline = 'Loading…';
+  else if (others && !entries.length) headline = `${personName} has nothing open.`;
+  else if (others)
+    headline = needsAttention.length
+      ? `${personName}: ${plural(needsAttention.length, 'task')} ${needsAttention.length === 1 ? 'needs' : 'need'} attention.`
+      : `${personName} is on track.`;
+  else if (pendingMine.length && !entries.length) headline = 'New work for you.';
   else if (isFirstRun) headline = "Let's get started.";
   else if (needsAttention.length) headline = `${plural(needsAttention.length, 'task')} ${needsAttention.length === 1 ? 'needs' : 'need'} attention.`;
   else if (entries.length) headline = 'All caught up.';
@@ -118,6 +148,7 @@ export default function Workspace({ tasks, loading, focusTask, openId, onOpenIdC
         scope={scopes.get(task.id)}
         handle={handles.get(task.id) ?? ''}
         focusNonce={focusTask?.id === task.id ? focusTask.nonce : undefined}
+        mode={mode}
         open={openId === task.id}
         onOpenChange={(id, open) => onOpenIdChange(open ? id : openId === id ? null : openId)}
         onToggle={(id, done) => {
@@ -141,14 +172,30 @@ export default function Workspace({ tasks, loading, focusTask, openId, onOpenIdC
       <header className="mb-6">
         <div className="font-display font-bold tracking-widest uppercase text-xs text-accent-gradient mb-2">
           {today.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-          <span className="text-[var(--text-muted)] font-medium normal-case tracking-normal"> · {greeting(today.getHours())}</span>
+          <span className="text-[var(--text-muted)] font-medium normal-case tracking-normal">
+            {' · '}
+            {others ? `${personName}’s Mint-more work · ${mode === 'plan' ? 'you can edit and assign' : 'view only'}` : greeting(today.getHours())}
+          </span>
         </div>
         <h1 className="font-display text-3xl md:text-4xl font-bold tracking-tight">{headline}</h1>
       </header>
 
       {notice}
 
-      {/* Capture */}
+      {/* Assigned to you: accept or decline (with a note) */}
+      {pendingMine.length > 0 && onAnswer && (
+        <section id="assigned" className="mb-8 scroll-mt-4">
+          {sectionHeader('New from your team', pendingMine.length, 'border-[#257ef4]')}
+          <div className="mt-3 space-y-2">
+            {pendingMine.map((t) => (
+              <AssignmentCard key={t.id} task={t} todayKey={todayKey} onAnswer={onAnswer} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Capture (on a colleague's list: assign them a task) */}
+      {mode !== 'view' && (
       <form
         onSubmit={handleAddTask}
         className="mb-8 flex flex-wrap items-center gap-x-4 gap-y-2 border-b-2 border-[var(--line-color)] focus-within:border-[var(--accent)] transition-colors"
@@ -159,7 +206,7 @@ export default function Workspace({ tasks, loading, focusTask, openId, onOpenIdC
           type="text"
           value={newTaskText}
           onChange={(e) => setNewTaskText(e.target.value)}
-          placeholder="Add a task"
+          placeholder={others ? `Assign a task to ${personName}` : 'Add a task'}
           maxLength={500}
           autoFocus={isFirstRun}
           className="flex-1 min-w-[12rem] bg-transparent border-none py-2.5 text-xl md:text-2xl font-display font-medium tracking-tight outline-none clean-input focus:text-[var(--accent)] transition-colors"
@@ -185,10 +232,11 @@ export default function Workspace({ tasks, loading, focusTask, openId, onOpenIdC
           disabled={!newTaskText.trim()}
           className="font-display font-semibold uppercase tracking-widest text-sm text-[var(--text-main)] disabled:text-[var(--line-color)] hover:text-[var(--accent)] transition-colors cursor-pointer disabled:cursor-default pb-2 md:pb-0"
         >
-          Add
+          {others ? 'Assign' : 'Add'}
         </button>
         </span>
       </form>
+      )}
 
       {!loading && !isFirstRun && (
         // Two columns only when the list itself is wide enough (not the screen): with the assistant docked on
@@ -227,6 +275,7 @@ export default function Workspace({ tasks, loading, focusTask, openId, onOpenIdC
           </main>
         </div>
       )}
+      {footer}
     </div>
   );
 }

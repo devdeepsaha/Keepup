@@ -27,6 +27,13 @@ import MobileNav from './MobileNav';
 import OtherWorkspaceCard from './OtherWorkspaceCard';
 import { useOtherWorkspace } from '../hooks/useOtherWorkspace';
 import { onPageChangeBack, pushPage, replacePage, useBackClose } from '../lib/backStack';
+import { useOrg } from '../lib/org';
+import type { TaskEvent } from '../lib/notices';
+import TeamView from './TeamView';
+import PersonView from './PersonView';
+import AdminView from './AdminView';
+import NoticesBell from './NoticesBell';
+import WelcomePrompt from './WelcomePrompt';
 
 const SIDEBAR_KEY = 'agenda.sidebarCollapsed';
 const ASSISTANT_KEY = 'agenda.assistantOpen';
@@ -66,6 +73,9 @@ const VIEW_LABEL: Record<View, string> = {
   year: 'Insights › Year',
   stats: 'Insights › Stats',
   archive: 'Archive',
+  team: 'Team',
+  person: 'Team › Person',
+  admin: 'Admin',
 };
 
 export default function Shell({ user }: { user: User }) {
@@ -91,6 +101,7 @@ export default function Shell({ user }: { user: User }) {
     setLinks,
     setWaiting,
     deleteTask,
+    answerAssignment,
     restoreTask,
     archiveTask,
     purgeTask,
@@ -101,6 +112,11 @@ export default function Shell({ user }: { user: User }) {
     deletePlanned,
   } = useTasks(user.id, workspace, space.kind);
   const prefs = usePrefs();
+  const org = useOrg();
+  const [personId, setPersonId] = useState<string | null>(null); // the colleague open in the person view
+  const showTeam = org.people.length > 0 || org.isFounder || org.isManager;
+  const invitedWithoutPassword = !!user.invited_at && !user.user_metadata?.password_set;
+  const needsWelcome = org.ready && !!org.me && (!org.me.display_name || invitedWithoutPassword);
   const otherWorkspace = useOtherWorkspace(user.id, workspace); // what's pending in your other spaces
   const switchWorkspace = useCallback((w: WorkspaceId) => {
     setWorkspaceState(w);
@@ -188,9 +204,10 @@ export default function Shell({ user }: { user: User }) {
     if (window.innerWidth < 768) setCollapsedSaved(true);
   };
 
-  const navigate = (v: View, opts: { day?: string; section?: Section; keepOpen?: boolean } = {}) => {
+  const navigate = (v: View, opts: { day?: string; section?: Section; keepOpen?: boolean; person?: string } = {}) => {
     if (!opts.keepOpen) closeDrawerOnPhone();
-    if (v !== view) pushPage({ view: v, day: opts.day ?? null }); // back returns to the page before
+    if (v === 'person') setPersonId(opts.person ?? null);
+    if (v !== view || v === 'person') pushPage({ view: v, day: opts.day ?? null, person: opts.person ?? null }); // back returns to the page before
     setView(v);
     setCalendarDay(opts.day);
     if (opts.section) {
@@ -212,8 +229,9 @@ export default function Shell({ user }: { user: User }) {
   useEffect(() => {
     replacePage({ view: 'workspace', day: null });
     onPageChangeBack((state) => {
-      const s = (state ?? {}) as { view?: View; day?: string | null };
+      const s = (state ?? {}) as { view?: View; day?: string | null; person?: string | null };
       setView(s.view ?? 'workspace');
+      if (s.person) setPersonId(s.person);
       setCalendarDay(s.day ?? undefined);
       window.scrollTo({ top: 0 });
     });
@@ -261,6 +279,16 @@ export default function Shell({ user }: { user: User }) {
   }, [prefs.theme, prefs.density, workspace, width, resizing]);
 
   const handles = useMemo(() => taskHandles(tasks), [tasks]);
+
+  // A notice: your own task opens in Mint-more; a colleague's reply opens their list.
+  const openNotice = (e: TaskEvent) => {
+    if (e.owner_id === user.id && e.task_id) {
+      switchWorkspace('agency');
+      setView('workspace');
+      setOpenTaskId(e.task_id);
+      setFocusTask({ id: e.task_id, nonce: Date.now() });
+    } else if (org.levelFor(e.owner_id)) navigate('person', { person: e.owner_id });
+  };
   // For the phone nav badge: how many tasks need attention right now.
   const now = useNow();
   const attentionCount = useMemo(() => {
@@ -304,6 +332,9 @@ export default function Shell({ user }: { user: User }) {
         density={prefs.density}
         onSetTheme={prefs.setTheme}
         onSetDensity={prefs.setDensity}
+        displayName={org.me?.display_name}
+        team={showTeam ? { count: org.people.length } : null}
+        isAdmin={org.isAdmin}
       />
 
       {/* On small screens the expanded sidebar overlays content instead of pushing it. */}
@@ -314,7 +345,7 @@ export default function Shell({ user }: { user: User }) {
       >
         {/* Page header: sidebar toggle + breadcrumb */}
         {/* Pinned on every page: sidebar toggle + where you are */}
-        <header className="sticky top-0 z-[15] flex h-12 items-center gap-2 bg-[var(--bg-color)]/95 px-3 pr-16 backdrop-blur md:px-4">
+        <header className="sticky top-0 z-[15] flex h-12 items-center gap-2 bg-[var(--bg-color)]/95 px-3 pr-16 backdrop-blur md:pl-4 md:pr-16">
           <button
             onClick={toggleCollapsed}
             aria-label="Toggle sidebar"
@@ -331,8 +362,11 @@ export default function Shell({ user }: { user: User }) {
               {space.name}
             </button>
             <span className="hidden sm:inline text-[var(--text-muted)]">›</span>
-            <span className="font-medium">{VIEW_LABEL[view]}</span>
+            <span className="font-medium">{view === 'person' && personId ? `Team › ${org.nameOf(personId)}` : VIEW_LABEL[view]}</span>
           </nav>
+          <span className="ml-auto">
+            <NoticesBell userId={user.id} onOpen={openNotice} />
+          </span>
         </header>
 
         {error && (
@@ -351,7 +385,17 @@ export default function Shell({ user }: { user: User }) {
             focusTask={focusTask}
             openId={openTaskId}
             onOpenIdChange={setOpenTaskId}
+            onAnswer={answerAssignment}
             notice={
+              <>
+              {space.key !== 'agency' && (
+                <p className="mb-4 -mt-3 flex items-center gap-1.5 font-display text-xs text-[var(--text-muted)]">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
+                    <path d="M6 11V8a6 6 0 1 1 12 0v3M5 11h14v10H5z" />
+                  </svg>
+                  Only you can see this space.
+                </p>
+              )}
               <OtherWorkspaceCard
                 items={otherWorkspace.items}
                 onOpen={(id, target) => {
@@ -360,6 +404,7 @@ export default function Shell({ user }: { user: User }) {
                   setFocusTask({ id, nonce: Date.now() });
                 }}
               />
+              </>
             }
             onAddTask={addTask}
             onToggle={toggleTask}
@@ -385,6 +430,12 @@ export default function Shell({ user }: { user: User }) {
           <YearView tasks={history} loading={loading} onOpenDay={(day) => navigate('calendar', { day })} />
         ) : view === 'stats' ? (
           <StatsView tasks={history} loading={loading} />
+        ) : view === 'team' ? (
+          <TeamView userId={user.id} onOpenPerson={(id) => navigate('person', { person: id })} />
+        ) : view === 'person' && personId ? (
+          <PersonView key={personId} personId={personId} onBack={() => navigate('team')} />
+        ) : view === 'admin' ? (
+          <AdminView userId={user.id} />
         ) : (
           <ArchiveView
             archived={archived}
@@ -419,6 +470,8 @@ export default function Shell({ user }: { user: User }) {
         onChanged={refetch}
         prefill={prefill}
       />
+
+      {needsWelcome && <WelcomePrompt user={user} currentName={org.me?.display_name ?? null} />}
 
       {/* Tap-away backdrop for the expanded sidebar on small screens */}
       {!collapsed && <div className="fixed inset-0 z-[35] bg-black/30 md:hidden" onClick={toggleCollapsed} />}

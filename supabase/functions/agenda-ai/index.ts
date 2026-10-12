@@ -48,7 +48,7 @@ const DAY_MS = 86_400_000;
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-keepup-org',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
@@ -896,6 +896,70 @@ async function callGemini(req: ModelRequest, apiKey: string): Promise<ModelResul
   });
 }
 
+// ---------- team (read only) ----------
+// Founders, managers and the admin: the colleagues' Mint-more work the database lets this person see. Fetched as
+// them with the app's "x-keepup-org" marker, so the database's sharing rules decide what comes back.
+interface TeamTaskRow {
+  user_id: string;
+  text: string;
+  due_date: string | null;
+  cadence_per_week: number | null;
+  waiting_since: string | null;
+  waiting_for: string | null;
+  assignment_status: string | null;
+  task_updates: { text: string; created_at: string }[];
+  planned_updates: { send_on: string; title: string; status: string }[];
+}
+
+async function loadTeam(authHeader: string, me: string, clock: Clock): Promise<string> {
+  const teamDb = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, {
+    global: { headers: { Authorization: authHeader, 'x-keepup-org': '1' } },
+  });
+  const [{ data: rows }, { data: people }] = await Promise.all([
+    teamDb
+      .from('tasks')
+      .select('user_id, text, due_date, cadence_per_week, waiting_since, waiting_for, assignment_status, task_updates (text, created_at), planned_updates (send_on, title, status)')
+      .eq('workspace', 'agency')
+      .neq('user_id', me)
+      .eq('done', false)
+      .is('deleted_at', null)
+      .is('archived_at', null)
+      .limit(400),
+    teamDb.from('members').select('user_id, display_name, roles, status'),
+  ]);
+  const tasks = (rows ?? []) as TeamTaskRow[];
+  if (!tasks.length) return '';
+  const nameOf = new Map((people ?? []).map((p: { user_id: string; display_name: string | null; status: string }) => [
+    p.user_id,
+    `${p.display_name || 'Unnamed colleague'}${p.status === 'removed' ? ' (left the company)' : ''}`,
+  ]));
+  const byPerson = new Map<string, TeamTaskRow[]>();
+  for (const t of tasks) byPerson.set(t.user_id, [...(byPerson.get(t.user_id) ?? []), t]);
+  const { weekStart } = clock.describeNow();
+  const lines: string[] = [];
+  for (const [id, list] of byPerson) {
+    const thisWeek = list.flatMap((t) => t.task_updates).filter((u) => clock.keyOf(u.created_at) >= weekStart).length;
+    lines.push(`${nameOf.get(id) ?? 'A colleague'}: ${list.length} open, ${thisWeek} updates logged this week`);
+    for (const t of list.slice(0, 30)) {
+      const last = [...t.task_updates].sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
+      const bits: string[] = [];
+      if (t.due_date) {
+        const d = clock.daysBetween(clock.today, t.due_date);
+        bits.push(d < 0 ? `OVERDUE ${-d}d (due ${t.due_date})` : d === 0 ? 'due TODAY' : `due ${t.due_date}`);
+      }
+      bits.push(last ? `last update ${clock.daysBetween(clock.keyOf(last.created_at), clock.today)}d ago: "${clean(last.text, 100)}"` : 'no updates yet');
+      if (t.cadence_per_week) bits.push(`${t.cadence_per_week}x/week rhythm`);
+      if (t.waiting_since) bits.push(`on hold${t.waiting_for ? `, waiting for ${clean(t.waiting_for, 60)}` : ''}`);
+      const next = t.planned_updates.filter((p) => p.status === 'planned').sort((a, b) => a.send_on.localeCompare(b.send_on))[0];
+      if (next) bits.push(`next planned client update ${next.send_on <= clock.today ? 'DUE NOW' : next.send_on}: "${clean(next.title, 60)}"`);
+      if (t.assignment_status === 'pending') bits.push('assigned, not accepted yet');
+      lines.push(`  - "${clean(t.text, 120)}" · ${bits.join(' · ')}`);
+    }
+    if (list.length > 30) lines.push(`  - …and ${list.length - 30} more`);
+  }
+  return `\n\n<team>\nColleagues' Mint-more work the user can see (read only; not in the task list above):\n${lines.join('\n')}\n</team>`;
+}
+
 // ---------- request handling ----------
 
 async function handle(req: Request): Promise<Response> {
@@ -960,7 +1024,17 @@ async function handle(req: Request): Promise<Response> {
   const allTasks = (tasks ?? []) as unknown as (TaskRow & { workspace: WorkspaceId })[];
   const here = allTasks.filter((t) => t.workspace === workspace);
   const elsewhere = allTasks.filter((t) => t.workspace !== workspace && !t.done);
-  const { refs, text: contextText } = buildContext(here, clock, clean(body.tz?.name ?? 'UTC', 64), clientInfo, currentSpace, elsewhere, spaces);
+  const { refs, text: ownContext } = buildContext(here, clock, clean(body.tz?.name ?? 'UTC', 64), clientInfo, currentSpace, elsewhere, spaces);
+  // Founders and managers: their people's Mint-more work, read only (empty for everyone else).
+  // (Only for the app version that sends "x-keepup-org", like the database's own sharing rules.)
+  const teamText =
+    req.headers.get('x-keepup-org') === '1'
+      ? await loadTeam(authHeader, userData.user.id, clock).catch((e) => {
+          console.error('team context failed', e);
+          return '';
+        })
+      : '';
+  const contextText = ownContext + teamText;
 
   const history = (body.history ?? [])
     .slice(-MAX_HISTORY)

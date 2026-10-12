@@ -14,7 +14,7 @@ import type { Task, Workspace } from '../types';
 // Layout modelled on shadcn's sidebar-07: collapses to icons, clickable edge rail, Ctrl/⌘+B,
 // grouped nav with collapsible sub-items, a "projects" list with per-item menus, and a user menu.
 
-export type View = 'workspace' | 'calendar' | 'year' | 'stats' | 'archive';
+export type View = 'workspace' | 'calendar' | 'year' | 'stats' | 'archive' | 'team' | 'person' | 'admin';
 export type Section = 'needs-attention' | 'in-progress' | 'waiting' | 'archived' | 'trash';
 
 export const SIDEBAR_WIDTH = 256; // px, expanded (default; drag the edge to resize)
@@ -50,6 +50,9 @@ interface Props {
   density: Density;
   onSetTheme: (t: Theme) => void;
   onSetDensity: (d: Density) => void;
+  displayName?: string | null; // your name in the company
+  team?: { count: number; attention?: number } | null; // founders and managers: the people you can see
+  isAdmin?: boolean;
 }
 
 const Icon = ({ d, className = 'w-[18px] h-[18px]' }: { d: string; className?: string }) => (
@@ -68,6 +71,8 @@ const OPEN = 'M14 4h6v6M20 4l-8 8M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 
 const TRASH = 'M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4h6v3';
 const CHART = 'M4 20V10M10 20V4M16 20v-7M22 20H2';
 const ARCHIVE = 'M3 5h18v4H3zM5 9v10h14V9M10 13h4';
+const TEAM = 'M16 19v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1M9 10a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7M22 19v-1a4 4 0 0 0-3-3.9M16 3.1a3.5 3.5 0 0 1 0 6.8';
+const SHIELD = 'M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6zM9 12l2 2 4-4';
 const CHECK = 'M5 12l5 5 9-10';
 
 // A client's tile: its initial(s) on its colour. Filled while active; a dotted outline (letters in the
@@ -142,6 +147,9 @@ export default function Sidebar({
   density,
   onSetTheme,
   onSetDensity,
+  displayName,
+  team,
+  isAdmin,
 }: Props) {
   const { colorOf } = useClientColors();
   const [switcher, setSwitcher] = useState(false);
@@ -248,6 +256,7 @@ export default function Sidebar({
   const email = user.email ?? '';
   // "devdeep120205@…" → "Devdeep": drop digits and separators from the email's name part.
   const name =
+    displayName?.trim() ||
     email
       .split('@')[0]
       .replace(/[0-9._-]+/g, ' ')
@@ -300,6 +309,30 @@ export default function Sidebar({
         { label: `Trash · ${trashedCount}`, go: () => onNavigate('archive', { section: 'trash' }) },
       ],
     },
+    // The company: founders and managers see their people; the admin also gets the admin panel.
+    ...(team
+      ? [
+          {
+            id: 'team' as View,
+            views: ['team', 'person'] as View[],
+            label: 'Team',
+            icon: TEAM,
+            badge: team.count,
+            sub: [{ label: 'Everyone', go: () => onNavigate('team') }],
+          },
+        ]
+      : []),
+    ...(isAdmin
+      ? [
+          {
+            id: 'admin' as View,
+            views: ['admin'] as View[],
+            label: 'Admin',
+            icon: SHIELD,
+            sub: [{ label: 'People and access', go: () => onNavigate('admin') }],
+          },
+        ]
+      : []),
   ];
   const clientsLabel = current.kind === 'work' ? 'Work' : 'Projects';
 

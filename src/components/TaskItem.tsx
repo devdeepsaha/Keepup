@@ -10,6 +10,7 @@ import TaskLinks, { LinkChips } from './TaskLinks';
 import ActionSheet, { SHEET_ICONS } from './ActionSheet';
 import { useLongPress } from '../lib/useLongPress';
 import { useBackClose } from '../lib/backStack';
+import { useOrg } from '../lib/org';
 
 const STRIKE_MS = 650; // circle fills + line draws through the title
 const LEAVE_MS = 450; // row folds away, then the task moves lists
@@ -40,6 +41,8 @@ interface Props {
   onMarkPlannedSent: (taskId: string, update: PlannedUpdate) => void;
   onMovePlanned: (taskId: string, update: PlannedUpdate, sendOn: string) => void;
   onDeletePlanned: (taskId: string, update: PlannedUpdate) => void;
+  // Whose eyes: your own task, a colleague's you plan for (edit, not log/archive/delete), or one you only view.
+  mode?: 'own' | 'plan' | 'view';
 }
 
 const shortDate = (d: Date) => d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
@@ -70,14 +73,19 @@ export default function TaskItem({
   onMarkPlannedSent,
   onMovePlanned,
   onDeletePlanned,
+  mode = 'own',
 }: Props) {
+  const isOwner = mode === 'own';
+  const canEdit = mode !== 'view';
+  const { nameOf } = useOrg();
+  const ownerName = task.user_id ? nameOf(task.user_id) : 'They';
   const [updateText, setUpdateText] = useState('');
   const [isEditing, setIsEditing] = useState(false);
   const [draftTitle, setDraftTitle] = useState(task.text);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showSettings, setShowSettings] = useState(false); // due date / repeat / delete, folded away
   const [sheet, setSheet] = useState(false); // phones: tap-and-hold menu
-  const hold = useLongPress(() => phase === 'idle' && !isEditing && setSheet(true));
+  const hold = useLongPress(() => phase === 'idle' && !isEditing && canEdit && setSheet(true));
   useBackClose(sheet, () => setSheet(false));
   const [phase, setPhase] = useState<'idle' | 'striking' | 'leaving'>('idle');
   const titleInput = useRef<HTMLInputElement>(null);
@@ -119,7 +127,7 @@ export default function TaskItem({
   };
 
   const handleToggle = () => {
-    if (phase !== 'idle') return;
+    if (phase !== 'idle' || !canEdit) return;
     setPhase('striking');
     setOpen(false);
     timers.current.push(
@@ -188,7 +196,7 @@ export default function TaskItem({
   };
 
   const sheetActions = [
-    { label: waiting ? 'Log a nudge' : 'Log an update', icon: SHEET_ICONS.log, onSelect: openForLogging },
+    ...(isOwner ? [{ label: waiting ? 'Log a nudge' : 'Log an update', icon: SHEET_ICONS.log, onSelect: openForLogging }] : []),
     { label: done ? 'Mark as not done' : 'Mark as done', icon: SHEET_ICONS.done, onSelect: handleToggle },
     {
       label: 'Edit: due date, rhythm, client',
@@ -198,9 +206,13 @@ export default function TaskItem({
         setShowSettings(true);
       },
     },
-    ...(onAskAbout ? [{ label: 'Ask Bouncy about it', icon: SHEET_ICONS.ask, onSelect: () => onAskAbout(handle) }] : []),
-    { label: 'Archive', icon: SHEET_ICONS.archive, onSelect: () => onArchive(task.id) },
-    { label: 'Move to trash', icon: SHEET_ICONS.trash, onSelect: () => onDelete(task.id), danger: true },
+    ...(onAskAbout && isOwner ? [{ label: 'Ask Bouncy about it', icon: SHEET_ICONS.ask, onSelect: () => onAskAbout(handle) }] : []),
+    ...(isOwner
+      ? [
+          { label: 'Archive', icon: SHEET_ICONS.archive, onSelect: () => onArchive(task.id) },
+          { label: 'Move to trash', icon: SHEET_ICONS.trash, onSelect: () => onDelete(task.id), danger: true },
+        ]
+      : []),
   ];
 
   return (
@@ -215,13 +227,14 @@ export default function TaskItem({
           >
             <button
               aria-label={done ? 'Mark as not done' : 'Mark as done'}
+              disabled={!canEdit}
               onClick={(e) => {
                 e.stopPropagation();
                 handleToggle();
               }}
               className={`mt-1 @2xl:mt-0 w-6 h-6 shrink-0 rounded-full border-2 flex items-center justify-center transition-all duration-300 cursor-pointer ${
                 done ? 'border-[var(--text-muted)] bg-transparent' : 'border-[var(--text-main)] hover:bg-[var(--text-main)]'
-              }`}
+              } disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent`}
             >
               <div
                 className={`w-2.5 h-2.5 rounded-full transition-all duration-300 ${
@@ -254,9 +267,10 @@ export default function TaskItem({
                   />
                 ) : (
                   <h2
-                    title={`${task.text} (double-click to rename)`}
+                    title={canEdit ? `${task.text} (double-click to rename)` : task.text}
                     onDoubleClick={(e) => {
                       e.stopPropagation();
+                      if (!canEdit) return;
                       setDraftTitle(task.text);
                       setIsEditing(true);
                     }}
@@ -273,6 +287,16 @@ export default function TaskItem({
 
               {/* Status chips */}
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 @2xl:shrink-0 font-display text-xs whitespace-nowrap">
+                {task.assigned_by && task.assigned_by !== task.user_id && (
+                  <span title={`Assigned by ${nameOf(task.assigned_by)}`} className="text-[var(--text-muted)]">
+                    From <span className="font-semibold text-[var(--text-main)]">{nameOf(task.assigned_by)}</span>
+                  </span>
+                )}
+                {task.assignment_status === 'pending' && !isOwner && (
+                  <span className="rounded-full border border-dashed border-[var(--text-muted)] px-2 py-0.5 text-[0.625rem] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+                    Not accepted yet
+                  </span>
+                )}
                 {waiting && !done && (
                   <span
                     title={`On hold${task.waiting_for ? `: waiting for ${task.waiting_for}` : ''}`}
@@ -305,7 +329,7 @@ export default function TaskItem({
                 <span className="text-[var(--text-muted)] group-hover:text-[var(--text-main)] transition-colors">
                   {task.task_updates.length} {task.task_updates.length === 1 ? 'log' : 'logs'}
                 </span>
-                {attention && !done && !isOpen && (
+                {attention && !done && !isOpen && isOwner && (
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -325,6 +349,7 @@ export default function TaskItem({
                   </span>
                 )}
                 {/* Quick delete: appears on hover; first click asks, second moves it to the trash. */}
+                {isOwner && (
                 <button
                   aria-label={confirmDelete ? 'Confirm move to trash' : 'Move to trash'}
                   title={confirmDelete ? 'Click again to move it to the trash' : 'Move to trash (restorable for 30 days)'}
@@ -347,6 +372,7 @@ export default function TaskItem({
                     </svg>
                   )}
                 </button>
+                )}
               </div>
             </div>
           </div>
@@ -359,11 +385,17 @@ export default function TaskItem({
                 <PlannedUpdates
                   planned={(task.planned_updates ?? []).filter((p) => p.status === 'planned')}
                   todayKey={todayKey}
-                  onMarkSent={(u) => onMarkPlannedSent(task.id, u)}
-                  onMove={(u, d) => onMovePlanned(task.id, u, d)}
-                  onDelete={(u) => onDeletePlanned(task.id, u)}
+                  onMarkSent={isOwner ? (u) => onMarkPlannedSent(task.id, u) : undefined}
+                  onMove={canEdit ? (u, d) => onMovePlanned(task.id, u, d) : undefined}
+                  onDelete={canEdit ? (u) => onDeletePlanned(task.id, u) : undefined}
                 />
-                {/* 1. Write an update: the main thing you open a task for */}
+                {/* 1. Write an update: the main thing you open a task for (only ever by the task's owner) */}
+                {!isOwner && (
+                  <p className="pl-1 text-xs text-[var(--text-muted)]">
+                    Updates are logged by {ownerName}.{mode === 'view' ? ' You can view this task.' : ' You can change its details and planned updates.'}
+                  </p>
+                )}
+                {isOwner && (
                 <form
                   onSubmit={handleAddUpdate}
                   className="flex items-center gap-2 rounded-xl border border-[var(--line-color)] bg-[var(--surface)] pl-3 pr-1.5 py-1.5 focus-within:border-[var(--text-main)] transition-colors"
@@ -385,6 +417,7 @@ export default function TaskItem({
                     Post
                   </button>
                 </form>
+                )}
 
                 {/* 2. Logs, newest first: the latest status reads darkest, history fades */}
                 {task.task_updates.length === 0 ? (
@@ -403,6 +436,7 @@ export default function TaskItem({
                         >
                           {update.text}
                         </p>
+                        {isOwner && (
                         <button
                           aria-label="Delete log"
                           onClick={() => onDeleteUpdate(task.id, update.id)}
@@ -410,6 +444,7 @@ export default function TaskItem({
                         >
                           ×
                         </button>
+                        )}
                       </li>
                     ))}
                   </ol>
@@ -419,9 +454,9 @@ export default function TaskItem({
                 <div className="pl-1 font-display text-xs text-[var(--text-muted)]">
                   <button
                     type="button"
-                    onClick={() => setShowSettings((v) => !v)}
+                    onClick={() => canEdit && setShowSettings((v) => !v)}
                     aria-expanded={showSettings}
-                    className="hover:text-[var(--text-main)] transition-colors cursor-pointer"
+                    className={`transition-colors ${canEdit ? 'hover:text-[var(--text-main)] cursor-pointer' : 'cursor-default'}`}
                   >
                     {task.due_date ? `Due ${shortDate(keyToDate(task.due_date))}` : 'No due date'}
                     {' · '}
@@ -436,8 +471,12 @@ export default function TaskItem({
                         </span>
                       </>
                     )}
-                    {' · '}
-                    <span className="underline underline-offset-2">{showSettings ? 'Done' : 'Edit'}</span>
+                    {canEdit && (
+                      <>
+                        {' · '}
+                        <span className="underline underline-offset-2">{showSettings ? 'Done' : 'Edit'}</span>
+                      </>
+                    )}
                   </button>
                   {!!task.links?.length && (
                     <>
@@ -446,7 +485,7 @@ export default function TaskItem({
                     </>
                   )}
 
-                  {showSettings && (
+                  {showSettings && canEdit && (
                     <div className="mt-2.5 flex flex-wrap items-center gap-x-6 gap-y-2">
                       <label className="flex items-center gap-2">
                         <span className="uppercase tracking-wider">Due</span>
@@ -554,6 +593,7 @@ export default function TaskItem({
                         )}
                       </div>
 
+                      {isOwner && (
                       <span className="ml-auto flex items-center gap-4">
                         <button
                           onClick={() => onArchive(task.id)}
@@ -572,6 +612,7 @@ export default function TaskItem({
                           {confirmDelete ? 'Move to trash?' : 'Delete'}
                         </button>
                       </span>
+                      )}
                     </div>
                   )}
                 </div>

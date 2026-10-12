@@ -4,8 +4,8 @@ import { dayKey } from '../lib/dates';
 import { supabase } from '../lib/supabase';
 import type { PlannedUpdate, Task, TaskLink, TaskUpdate, Workspace } from '../types';
 
-const SELECT =
-  'id, text, done, completed_at, due_date, cadence_per_week, handle, client, waiting_since, waiting_for, workspace, archived_at, deleted_at, links, last_updated, created_at, task_updates (id, task_id, text, created_at), planned_updates (id, task_id, send_on, title, text, position, status, sent_at)';
+export const SELECT =
+  'id, user_id, assigned_by, assignment_status, assignment_note, text, done, completed_at, due_date, cadence_per_week, handle, client, waiting_since, waiting_for, workspace, archived_at, deleted_at, links, last_updated, created_at, task_updates (id, task_id, text, created_at), planned_updates (id, task_id, send_on, title, text, position, status, sent_at)';
 
 export const TRASH_DAYS = 30;
 
@@ -188,6 +188,17 @@ export function useTasks(userId: string, workspace: Workspace, kind: 'work' | 'p
     [commit, setTasks],
   );
   const deleteTask = useCallback((id: string) => patchTask(id, { deleted_at: new Date().toISOString() }), [patchTask]);
+  // A task someone assigned you: accept it, or decline with a note (it moves to Archive; they're told why).
+  const answerAssignment = useCallback(
+    (id: string, accept: boolean, note: string | null = null) =>
+      patchTask(
+        id,
+        accept
+          ? { assignment_status: 'accepted', assignment_note: null }
+          : { assignment_status: 'declined', assignment_note: note?.trim().slice(0, 500) || null, archived_at: new Date().toISOString() },
+      ),
+    [patchTask],
+  );
   const restoreTask = useCallback((id: string) => patchTask(id, { deleted_at: null, archived_at: null }), [patchTask]);
   const archiveTask = useCallback(
     (id: string, archived: boolean) => patchTask(id, { archived_at: archived ? new Date().toISOString() : null }),
@@ -293,6 +304,7 @@ export function useTasks(userId: string, workspace: Workspace, kind: 'work' | 'p
     setLinks,
     setWaiting,
     deleteTask,
+    answerAssignment,
     restoreTask,
     archiveTask,
     purgeTask,

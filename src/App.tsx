@@ -3,6 +3,7 @@ import type { Session } from '@supabase/supabase-js';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
 import Shell from './components/Shell';
 import { SpacesProvider } from './lib/spaces';
+import { OrgProvider } from './lib/org';
 import Auth from './components/Auth';
 
 function MissingConfig() {
@@ -42,7 +43,9 @@ export default function App() {
   if (!ready) return null;
   return session ? (
     <SpacesProvider key={session.user.id}>
-      <Shell user={session.user} />
+      <OrgProvider user={session.user}>
+        <Shell user={session.user} />
+      </OrgProvider>
     </SpacesProvider>
   ) : (
     <Auth />
