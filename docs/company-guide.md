@@ -140,5 +140,5 @@ exactly as before**: colleagues' work is only shared with this new version of th
 2. Then I apply `016_org_live.sql`, which removes that temporary safety switch.
 3. Set roles and access in Admin, then invite people a few at a time.
 
-The three accounts already in Keepup (Soumya, Rishav, and the "codex" test account) are **members** who can't see
-anyone yet. Each of them will be asked for their name the next time they sign in.
+Rishav's account, already in Keepup, is a **member** who can't see anyone yet. He'll be asked for his name the next
+time he signs in.
