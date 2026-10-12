@@ -4,7 +4,7 @@ import { isSupabaseConfigured, supabase } from './lib/supabase';
 import Shell from './components/Shell';
 import { SpacesProvider } from './lib/spaces';
 import { OrgProvider } from './lib/org';
-import Auth from './components/Auth';
+import Auth, { NewPassword } from './components/Auth';
 
 function MissingConfig() {
   return (
@@ -28,6 +28,8 @@ function MissingConfig() {
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [ready, setReady] = useState(false);
+  // Arrived from a password reset email: choose a new password before anything else.
+  const [recovering, setRecovering] = useState(false);
 
   useEffect(() => {
     if (!isSupabaseConfigured) return;
@@ -35,12 +37,16 @@ export default function App() {
       setSession(data.session);
       setReady(true);
     });
-    const { data } = supabase.auth.onAuthStateChange((_event, s) => setSession(s));
+    const { data } = supabase.auth.onAuthStateChange((event, s) => {
+      setSession(s);
+      if (event === 'PASSWORD_RECOVERY') setRecovering(true);
+    });
     return () => data.subscription.unsubscribe();
   }, []);
 
   if (!isSupabaseConfigured) return <MissingConfig />;
   if (!ready) return null;
+  if (recovering && session) return <NewPassword onDone={() => setRecovering(false)} />;
   return session ? (
     <SpacesProvider key={session.user.id}>
       <OrgProvider user={session.user}>
