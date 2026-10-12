@@ -1,0 +1,7 @@
+# Only what we set on the hosted project; everything not declared here is left as it is.
+project_id = "agenda-app"
+
+[auth]
+# Where sign-up confirmation and password-reset emails send people back to.
+site_url = "https://keepup.devdeepsaha.in"
+additional_redirect_urls = ["https://keepup.devdeepsaha.in/**", "http://localhost:5174/**"]
