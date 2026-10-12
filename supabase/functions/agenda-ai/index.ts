@@ -363,6 +363,7 @@ async function applyActions(
   clock: Clock,
   current: SpaceInfo,
   spaces: SpaceInfo[],
+  userId: string,
 ) {
   const workspace: WorkspaceId = current.key;
   const results: Result[] = [];
@@ -373,6 +374,7 @@ async function applyActions(
   const { data: activeNow } = await db
     .from('tasks')
     .select('id, text, last_updated')
+    .eq('user_id', userId) // only mine: colleagues' shared work can be readable too
     .eq('done', false)
     .eq('workspace', workspace)
     .is('deleted_at', null)
@@ -943,6 +945,7 @@ async function handle(req: Request): Promise<Response> {
     .select(
       'id, text, done, completed_at, due_date, cadence_per_week, waiting_since, waiting_for, workspace, links, last_updated, created_at, task_updates (id, text, created_at), planned_updates (send_on, title, text, status)',
     )
+    .eq('user_id', userData.user.id) // only the asker's own tasks (colleagues' shared work can be readable too)
     .is('deleted_at', null)
     .is('archived_at', null)
     .order('created_at', { ascending: true });
@@ -1003,7 +1006,7 @@ async function handle(req: Request): Promise<Response> {
   }
 
   const tModel = Date.now();
-  const results = await applyActions(db, output.actions, refs, clock, currentSpace, spaces);
+  const results = await applyActions(db, output.actions, refs, clock, currentSpace, spaces, userData.user.id);
   // A drafted client message, tied back to its task so the app can log it as sent.
   const draftTask = output.draft?.task_ref ? refs.get(output.draft.task_ref.trim().toUpperCase()) : undefined;
   const draft =

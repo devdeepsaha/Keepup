@@ -23,12 +23,13 @@ export function useOtherWorkspace(userId: string, current: Workspace) {
     const { data } = await supabase
       .from('tasks')
       .select(SELECT)
+      .eq('user_id', userId) // only mine
       .neq('workspace', current)
       .eq('done', false)
       .is('deleted_at', null)
       .is('archived_at', null);
     if (data) setTasks(data as unknown as Task[]);
-  }, [current]);
+  }, [current, userId]);
 
   useEffect(() => {
     setTasks([]);

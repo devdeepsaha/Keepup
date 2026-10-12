@@ -35,6 +35,7 @@ export function useTasks(userId: string, workspace: Workspace, kind: 'work' | 'p
     const { data, error } = await supabase
       .from('tasks')
       .select(SELECT)
+      .eq('user_id', userId) // only mine: with the company rules, colleagues' work can be readable too
       .eq('workspace', workspace)
       .order('created_at', { ascending: false })
       .order('created_at', { referencedTable: 'task_updates', ascending: true });
@@ -46,13 +47,13 @@ export function useTasks(userId: string, workspace: Workspace, kind: 'work' | 'p
       setLoaded({ workspace, tasks: data as unknown as Task[] });
       setError(null);
     }
-  }, [workspace]);
+  }, [workspace, userId]);
 
   // Empty the trash of anything older than 30 days (once per session and workspace).
   useEffect(() => {
     const cutoff = new Date(Date.now() - TRASH_DAYS * 86_400_000).toISOString();
-    supabase.from('tasks').delete().eq('workspace', workspace).lt('deleted_at', cutoff).then(() => {});
-  }, [workspace]);
+    supabase.from('tasks').delete().eq('user_id', userId).eq('workspace', workspace).lt('deleted_at', cutoff).then(() => {});
+  }, [workspace, userId]);
 
   // Initial load + realtime sync across tabs/devices (debounced refetch).
   useEffect(() => {
