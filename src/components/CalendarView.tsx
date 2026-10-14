@@ -323,6 +323,7 @@ export default function CalendarView({ tasks, loading, initialDay, onToggle }: P
   const monday = startOfWeek(today);
   const presets: { label: string; from: Date; to: Date }[] = [
     { label: 'Today', from: today, to: today },
+    { label: 'Tomorrow', from: addDays(today, 1), to: addDays(today, 1) },
     { label: 'Yesterday', from: addDays(today, -1), to: addDays(today, -1) },
     { label: 'This week', from: monday, to: addDays(monday, 6) },
     { label: 'Next week', from: addDays(monday, 7), to: addDays(monday, 13) },

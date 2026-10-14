@@ -14,7 +14,7 @@ import type { Task, Workspace } from '../types';
 // Layout modelled on shadcn's sidebar-07: collapses to icons, clickable edge rail, Ctrl/⌘+B,
 // grouped nav with collapsible sub-items, a "projects" list with per-item menus, and a user menu.
 
-export type View = 'workspace' | 'calendar' | 'year' | 'stats' | 'archive' | 'team' | 'person' | 'admin';
+export type View = 'workspace' | 'calendar' | 'year' | 'stats' | 'archive' | 'team' | 'person' | 'admin' | 'clients';
 export type Section = 'needs-attention' | 'in-progress' | 'waiting' | 'archived' | 'trash';
 
 export const SIDEBAR_WIDTH = 256; // px, expanded (default; drag the edge to resize)
@@ -53,6 +53,7 @@ interface Props {
   displayName?: string | null; // your name in the company
   team?: { count: number; attention?: number } | null; // founders and managers: the people you can see
   isAdmin?: boolean;
+  isFounder?: boolean;
 }
 
 const Icon = ({ d, className = 'w-[18px] h-[18px]' }: { d: string; className?: string }) => (
@@ -150,6 +151,7 @@ export default function Sidebar({
   displayName,
   team,
   isAdmin,
+  isFounder,
 }: Props) {
   const { colorOf } = useClientColors();
   const [switcher, setSwitcher] = useState(false);
@@ -309,7 +311,7 @@ export default function Sidebar({
         { label: `Trash · ${trashedCount}`, go: () => onNavigate('archive', { section: 'trash' }) },
       ],
     },
-    // The company: founders and managers see their people; the admin also gets the admin panel.
+    // The company: founders and managers see their people; the admin/founder also gets the admin panel.
     ...(team
       ? [
           {
@@ -318,18 +320,21 @@ export default function Sidebar({
             label: 'Team',
             icon: TEAM,
             badge: team.count,
-            sub: [{ label: 'Everyone', go: () => onNavigate('team') }],
+            sub: [
+              { label: 'Everyone', go: () => onNavigate('team') },
+              { label: 'Clients', go: () => onNavigate('clients') },
+            ],
           },
         ]
       : []),
-    ...(isAdmin
+    ...(isAdmin || isFounder
       ? [
           {
             id: 'admin' as View,
             views: ['admin'] as View[],
-            label: 'Admin',
+            label: isAdmin ? 'Admin' : 'Management',
             icon: SHIELD,
-            sub: [{ label: 'People, teams & access', go: () => onNavigate('admin') }],
+            sub: [{ label: isAdmin ? 'People, teams & access' : 'Access & history', go: () => onNavigate('admin') }],
           },
         ]
       : []),

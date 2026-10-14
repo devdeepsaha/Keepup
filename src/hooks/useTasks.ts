@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase';
 import type { PlannedUpdate, Task, TaskLink, TaskUpdate, Workspace } from '../types';
 
 export const SELECT =
-  'id, user_id, assigned_by, assignment_status, assignment_note, text, done, completed_at, due_date, cadence_per_week, handle, client, waiting_since, waiting_for, workspace, archived_at, deleted_at, links, last_updated, created_at, task_updates (id, task_id, text, created_at), planned_updates (id, task_id, send_on, title, text, position, status, sent_at)';
+  'id, user_id, assigned_by, assignment_status, assignment_note, text, done, completed_at, due_date, cadence_per_week, handle, client, waiting_since, waiting_for, workspace, archived_at, deleted_at, links, last_updated, created_at, scheduled_date, deadline, priority, topic, task_brief, client_id, task_references, task_updates (id, task_id, text, created_at), planned_updates (id, task_id, send_on, title, text, position, status, sent_at)';
 
 export const TRASH_DAYS = 30;
 

@@ -28,6 +28,26 @@ export interface Task {
   assigned_by?: string | null; // a founder or manager who gave it to its owner
   assignment_status?: 'pending' | 'accepted' | 'declined' | null; // the owner's answer
   assignment_note?: string | null; // why they declined
+  // richer task metadata (phase 7)
+  scheduled_date?: string | null; // 'YYYY-MM-DD' — when to work on it
+  deadline?: string | null; // ISO timestamp — when it's due to the client
+  priority?: 'low' | 'medium' | 'high' | 'urgent' | null;
+  topic?: string | null; // short subject, e.g. "Homepage copy"
+  task_brief?: string | null; // longer description / brief
+  client_id?: string | null; // FK to public.clients
+  task_references?: TaskReference[]; // optional links (spreadsheet, IG, etc.)
+}
+
+export interface TaskReference {
+  label: string; // "Design brief", "Instagram post", etc.
+  url: string;
+}
+
+export interface Client {
+  id: string;
+  name: string;
+  team_id: string | null;
+  created_at: string;
 }
 
 export interface TaskLink {

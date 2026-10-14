@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { supabase } from './supabase';
+import type { Client } from '../types';
 
 // The company (Mint-more): who's in it, their roles, and whose shared Mint-more work you can see.
 // The database enforces all of this (015_org_policies.sql); this only mirrors it for the screens.
@@ -58,6 +59,7 @@ interface OrgValue {
   teamAccess: TeamAccessRow[];
   scopes: ScopeRow[];
   people: Person[]; // colleagues whose Mint-more work you can see
+  clients: Client[];
   isAdmin: boolean;
   isFounder: boolean;
   isManager: boolean;
@@ -86,6 +88,7 @@ export function OrgProvider({ user, children }: { user: User; children: ReactNod
   const [teams, setTeams] = useState<Team[]>([]);
   const [teamAccess, setTeamAccess] = useState<TeamAccessRow[]>([]);
   const [scopes, setScopes] = useState<ScopeRow[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
   // Who you can see, worked out by the database from every rule (Everyone, teams, exceptions).
   const [mine, setMine] = useState<{ user_id: string; level: Level }[]>([]);
   const [ready, setReady] = useState(false);
@@ -93,7 +96,7 @@ export function OrgProvider({ user, children }: { user: User; children: ReactNod
   const [emailNames, setEmailNames] = useState<Map<string, string>>(new Map());
 
   const refresh = useCallback(async () => {
-    const [m, a, t, tm, ta, sc, my] = await Promise.all([
+    const [m, a, t, tm, ta, sc, my, cl] = await Promise.all([
       supabase.from('members').select('user_id, display_name, roles, status, invited_by, created_at').order('created_at'),
       supabase.from('access').select('viewer_id, subject_id, level, granted_by, created_at'),
       supabase.from('teams').select('id, name').order('name'),
@@ -101,6 +104,7 @@ export function OrgProvider({ user, children }: { user: User; children: ReactNod
       supabase.from('team_access').select('viewer_id, team_id, level, granted_by'),
       supabase.from('viewer_scope').select('viewer_id, level, granted_by'),
       supabase.rpc('org_my_people'),
+      supabase.from('clients').select('id, name, team_id, created_at').order('name'),
     ]);
     if (m.data) setMembers(m.data as Member[]);
     if (a.data) setAccess(a.data as AccessRow[]);
@@ -111,6 +115,7 @@ export function OrgProvider({ user, children }: { user: User; children: ReactNod
     if (ta.data) setTeamAccess(ta.data as TeamAccessRow[]);
     if (sc.data) setScopes(sc.data as ScopeRow[]);
     if (my.data) setMine(my.data as { user_id: string; level: Level }[]);
+    if (cl.data) setClients(cl.data as Client[]);
     // (Returns nothing for anyone but the admin.)
     const { data: emails } = await supabase.rpc('org_emails');
     if (emails) setEmailNames(new Map((emails as { user_id: string; email: string }[]).map((e) => [e.user_id, nameFromEmail(e.email)])));
@@ -128,6 +133,7 @@ export function OrgProvider({ user, children }: { user: User; children: ReactNod
       .on('postgres_changes', { event: '*', schema: 'public', table: 'team_members' }, () => refresh())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'team_access' }, () => refresh())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'viewer_scope' }, () => refresh())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'clients' }, () => refresh())
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
@@ -157,6 +163,7 @@ export function OrgProvider({ user, children }: { user: User; children: ReactNod
       teamAccess,
       scopes,
       people,
+      clients,
       isAdmin,
       isFounder: has('founder'),
       isManager: has('manager'),
@@ -176,7 +183,7 @@ export function OrgProvider({ user, children }: { user: User; children: ReactNod
         return null;
       },
     };
-  }, [members, access, teams, teamAccess, scopes, mine, ready, user.id, refresh, emailNames]);
+  }, [members, access, teams, teamAccess, scopes, clients, mine, ready, user.id, refresh, emailNames]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
@@ -191,6 +198,7 @@ const SOLO: OrgValue = {
   teamAccess: [],
   scopes: [],
   people: [],
+  clients: [],
   isAdmin: false,
   isFounder: false,
   isManager: false,

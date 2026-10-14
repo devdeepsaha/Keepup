@@ -32,6 +32,7 @@ import type { TaskEvent } from '../lib/notices';
 import TeamView from './TeamView';
 import PersonView from './PersonView';
 import AdminView from './AdminView';
+import ClientsView from './ClientsView';
 import NoticesBell from './NoticesBell';
 import WelcomePrompt from './WelcomePrompt';
 
@@ -76,6 +77,7 @@ const VIEW_LABEL: Record<View, string> = {
   team: 'Team',
   person: 'Team › Person',
   admin: 'Admin',
+  clients: 'Clients',
 };
 
 export default function Shell({ user }: { user: User }) {
@@ -335,6 +337,7 @@ export default function Shell({ user }: { user: User }) {
         displayName={org.me?.display_name}
         team={showTeam ? { count: org.people.length } : null}
         isAdmin={org.isAdmin}
+        isFounder={org.isFounder}
       />
 
       {/* On small screens the expanded sidebar overlays content instead of pushing it. */}
@@ -436,6 +439,8 @@ export default function Shell({ user }: { user: User }) {
           <PersonView key={personId} personId={personId} onBack={() => navigate('team')} />
         ) : view === 'admin' ? (
           <AdminView userId={user.id} />
+        ) : view === 'clients' ? (
+          <ClientsView />
         ) : (
           <ArchiveView
             archived={archived}

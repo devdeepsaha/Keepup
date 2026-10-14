@@ -2,12 +2,11 @@ import { useState, type FormEvent } from 'react';
 import { supabase } from '../lib/supabase';
 import Logo from './Logo';
 
-type Mode = 'signin' | 'signup' | 'reset';
+type Mode = 'signin' | 'reset';
 
 export default function Auth() {
   const [mode, setMode] = useState<Mode>('signin');
   const [email, setEmail] = useState('');
-  const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -28,14 +27,6 @@ export default function Auth() {
       const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: window.location.origin });
       if (error) setError(/rate limit/i.test(error.message) ? 'Too many emails just now. Try again in a few minutes.' : error.message);
       else setNotice('If that email has a Keepup account, a reset link is on its way. Check your inbox (and spam).');
-    } else {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: { emailRedirectTo: window.location.origin, data: { display_name: name.trim() } },
-      });
-      if (error) setError(error.message);
-      else if (!data.session) setNotice('Check your inbox to confirm your email, then sign in.');
     }
     setBusy(false);
   };
@@ -58,43 +49,14 @@ export default function Auth() {
         </div>
         <h1 className="font-display text-6xl md:text-8xl font-bold tracking-tighter leading-none inline-block">
           {mode === 'signin' ? (
-            <>
-              Welcome
-              <br />
-              back.
-            </>
-          ) : mode === 'reset' ? (
-            <>
-              Reset
-              <br />
-              password.
-            </>
+            <>Welcome<br />back.</>
           ) : (
-            <>
-              Start
-              <br />
-              keeping up.
-            </>
+            <>Reset<br />password.</>
           )}
         </h1>
       </header>
 
       <form onSubmit={handleSubmit} className="max-w-xl space-y-8">
-        {mode === 'signup' && (
-          <label className="block relative group">
-            <span className="block text-xs uppercase tracking-widest font-display text-[var(--text-muted)]">Your name</span>
-            <input
-              required
-              autoComplete="name"
-              maxLength={60}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="How colleagues will see you"
-              className={inputClass}
-            />
-            <div className="absolute left-0 bottom-0 w-full h-[2px] bg-[var(--line-color)] transition-all duration-500 group-focus-within:bg-[image:var(--accent-gradient)]" />
-          </label>
-        )}
         <label className="block relative group">
           <span className="block text-xs uppercase tracking-widest font-display text-[var(--text-muted)]">Email</span>
           <input
@@ -161,15 +123,17 @@ export default function Auth() {
             disabled={busy}
             className="font-display font-semibold uppercase tracking-widest text-sm bg-[var(--text-main)] text-[var(--bg-color)] px-8 py-4 rounded-full hover:bg-[image:var(--accent-gradient)] transition-colors disabled:opacity-50 cursor-pointer"
           >
-            {busy ? 'One moment…' : mode === 'signin' ? 'Sign in' : mode === 'reset' ? 'Send reset link' : 'Create account'}
+            {busy ? 'One moment…' : mode === 'signin' ? 'Sign in' : 'Send reset link'}
           </button>
-          <button
-            type="button"
-            onClick={() => switchMode(mode === 'signin' ? 'signup' : 'signin')}
-            className="text-sm text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors cursor-pointer"
-          >
-            {mode === 'signin' ? 'New here? Create an account' : mode === 'reset' ? 'Back to sign in' : 'Have an account? Sign in'}
-          </button>
+          {mode === 'reset' && (
+            <button
+              type="button"
+              onClick={() => switchMode('signin')}
+              className="text-sm text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors cursor-pointer"
+            >
+              Back to sign in
+            </button>
+          )}
         </div>
       </form>
     </div>

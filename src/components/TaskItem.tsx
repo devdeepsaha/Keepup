@@ -301,6 +301,24 @@ export default function TaskItem({
                     From <span className="font-semibold text-[var(--text-main)]">{nameOf(task.assigned_by)}</span>
                   </span>
                 )}
+                {task.priority === 'urgent' && !done && (
+                  <span className="rounded-full bg-red-500 text-white px-2 py-0.5 text-[0.625rem] font-semibold uppercase tracking-wider">Urgent</span>
+                )}
+                {task.priority === 'high' && !done && (
+                  <span className="rounded-full border border-orange-400 text-orange-400 px-2 py-0.5 text-[0.625rem] font-semibold uppercase tracking-wider">High</span>
+                )}
+                {task.topic && !done && (
+                  <span className="rounded-full border border-[var(--line-color)] px-2 py-0.5 text-[0.625rem] text-[var(--text-muted)]">{task.topic}</span>
+                )}
+                {task.deadline && !done && (() => {
+                  const dl = new Date(task.deadline);
+                  const over = dl < new Date();
+                  return (
+                    <span className={`rounded-full px-2 py-0.5 text-[0.625rem] font-semibold ${over ? 'bg-red-500/10 text-red-500' : 'bg-[var(--surface)] text-[var(--text-muted)]'}`}>
+                      {over ? 'Overdue ' : ''}due {dl.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    </span>
+                  );
+                })()}
                 {task.assignment_status === 'pending' && !isOwner && (
                   <span className="rounded-full border border-dashed border-[var(--text-muted)] px-2 py-0.5 text-[0.625rem] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                     Not accepted yet

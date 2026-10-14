@@ -7,11 +7,15 @@ import TeamsEditor from './TeamsEditor';
 
 type Tab = 'people' | 'teams' | 'access' | 'history';
 
-const TABS: { id: Tab; label: string; desc: string }[] = [
-  { id: 'people',  label: 'People',  desc: 'Invite, roles and remove' },
-  { id: 'teams',   label: 'Teams',   desc: 'Groups for bulk access' },
-  { id: 'access',  label: 'Access',  desc: 'Who sees whose work' },
-  { id: 'history', label: 'History', desc: 'What changed and when' },
+const ADMIN_TABS: { id: Tab; label: string }[] = [
+  { id: 'people',  label: 'People' },
+  { id: 'teams',   label: 'Teams' },
+  { id: 'access',  label: 'Access' },
+  { id: 'history', label: 'History' },
+];
+const FOUNDER_TABS: { id: Tab; label: string }[] = [
+  { id: 'access',  label: 'Access' },
+  { id: 'history', label: 'History' },
 ];
 
 interface Account {
@@ -25,7 +29,7 @@ const ROLE_CHOICES: Role[] = ['admin', 'founder', 'manager'];
 
 export default function AdminView({ userId }: { userId: string }) {
   const org = useOrg();
-  const [tab, setTab] = useState<Tab>('people');
+  const [tab, setTab] = useState<Tab>(org.isAdmin ? 'people' : 'access');
   const [accounts, setAccounts] = useState<Map<string, Account>>(new Map());
   const [events, setEvents] = useState<TaskEvent[]>([]);
   const [invite, setInvite] = useState({ email: '', name: '', role: 'member' as Role });
@@ -50,7 +54,9 @@ export default function AdminView({ userId }: { userId: string }) {
     loadEvents();
   }, [loadAccounts, loadEvents, org.members]);
 
-  if (!org.isAdmin) return <p className="px-6 pt-6 text-[var(--text-muted)]">Only the admin can open this page.</p>;
+  if (!org.isAdmin && !org.isFounder) return <p className="px-6 pt-6 text-[var(--text-muted)]">Only admins and founders can open this page.</p>;
+
+  const tabs = org.isAdmin ? ADMIN_TABS : FOUNDER_TABS;
 
   const sendInvite = async (e: FormEvent) => {
     e.preventDefault();
@@ -91,8 +97,10 @@ export default function AdminView({ userId }: { userId: string }) {
   const people = [...org.members].sort(
     (a, b) => Number(a.status === 'removed') - Number(b.status === 'removed') || (a.display_name ?? '').localeCompare(b.display_name ?? ''),
   );
+  // Admin: all active founders and managers (including those who are also admin).
+  // Founder: only the managers they oversee (who are in their visibility scope).
   const viewers = org.members.filter(
-    (m) => m.status === 'active' && !m.roles.includes('admin') && (m.roles.includes('founder') || m.roles.includes('manager')),
+    (m) => m.status === 'active' && (m.roles.includes('founder') || m.roles.includes('manager')),
   );
 
   return (
@@ -101,7 +109,7 @@ export default function AdminView({ userId }: { userId: string }) {
       <div className="shrink-0 border-b border-[var(--line-color)] px-5 md:px-8 lg:px-10 pt-6">
         <div className="font-display font-bold tracking-widest uppercase text-xs text-accent-gradient mb-4">Admin · Mint-more</div>
         <nav className="flex gap-0 -mb-px">
-          {TABS.map((t) => (
+          {tabs.map((t) => (
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
