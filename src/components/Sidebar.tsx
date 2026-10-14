@@ -474,7 +474,7 @@ export default function Sidebar({
       }}
       aria-label={label}
       className={`absolute right-1 top-1/2 -translate-y-1/2 rounded-md p-1 text-[var(--text-muted)] hover:bg-[var(--surface)] hover:text-[var(--text-main)] transition-opacity cursor-pointer ${
-        isOpen ? 'opacity-100' : 'opacity-0 group-hover/client:opacity-100 focus:opacity-100'
+        isOpen ? 'opacity-100' : 'opacity-0 group-hover/client:opacity-100 focus:opacity-100 touch:opacity-100'
       }`}
     >
       <Icon d={DOTS} className="w-4 h-4" />

@@ -43,8 +43,20 @@ Some things only the owner of a task can ever do, whatever access others have:
 - archive, trash or move a task to another space;
 - accept or decline an assignment.
 
-A founder can only pass on what they have themselves. If the admin gave a founder **View** of Rahul, that founder
-can give a manager **View** of Rahul, but not **Plan**.
+### Who sees whom: Everyone, Teams, Exceptions
+You don't set access one person at a time. For each founder or manager there are three layers:
+1. **Everyone:** None, View or Plan for the whole company, including people who join later. It never includes the
+   admin. For a manager set up by a founder, it means everyone that founder can see.
+2. **Teams:** groups the admin makes (Design, Dev, Content…). Give a founder or manager a whole team at View or Plan.
+   Adding someone to a team gives them access straight away.
+3. **Exceptions:** single people that override the layers above, for example "Everyone except Rahul" (Hide this
+   person), or Plan for one person on a View-only team.
+
+The most specific layer wins: an exception, then the best team, then Everyone. A summary at the top shows who that
+person ends up seeing.
+
+A founder can never give a manager more than the founder has. If the founder can only **View** Rahul, their manager
+gets at most View of Rahul, even with "Everyone at Plan".
 
 ## How each person uses it
 
@@ -55,10 +67,11 @@ can give a manager **View** of Rahul, but not **Plan**.
    - If you hit the limit, the panel says so; try again later.
 2. **People:** tap Admin, Founder or Manager next to a person to turn that role on or off. Member is always on.
    You can't remove your own admin role, so the company is never left without an admin.
-3. **Who sees whom:** pick a founder or manager, then choose None, View or Plan for each person.
-4. **Remove:** for someone who left. They can no longer sign in and lose any access they had. **Their Mint-more
+3. **Who sees whom:** pick a founder or manager, then set Everyone, Teams and Exceptions (see above).
+4. **Teams:** make teams and add people to them with **+ Add person**.
+5. **Remove:** for someone who left. They can no longer sign in and lose any access they had. **Their Mint-more
    tasks stay** so the work can be handed over. Restore undoes it.
-5. **Change history:** every change someone made to another person's task, every assignment, and every accept or
+6. **Change history:** every change someone made to another person's task, every assignment, and every accept or
    decline, with who did it and when.
 
 ### Founder (sidebar → Team)
@@ -75,7 +88,7 @@ can give a manager **View** of Rahul, but not **Plan**.
   - type in **"Assign a task to …"** to give them work;
   - open any task to edit it.
 - **Make manager / Remove manager role** on a card, for people you can see.
-- **Managers** section: pick a manager and give them people from your own list.
+- **Managers** section: pick a manager and give them everyone you can see, whole teams, or single people.
 - **Hand over** (at the bottom of a person's list, with Plan access to both people) moves all of someone's open
   Mint-more tasks, with their logs and planned updates, to someone else. They accept them like any assignment.
   Use it when someone leaves.
@@ -121,9 +134,9 @@ space or chats.
 
 The rules live in the **database** (Supabase row-level security), not just in the app's screens. So even someone
 calling the database directly gets nothing they aren't allowed to see.
-- The rules are in `supabase/migrations/014_org.sql` and `015_org_policies.sql`.
+- The rules are in `supabase/migrations/014_org.sql`, `015_org_policies.sql` and `017_access_groups.sql`.
 - An automated test (`supabase/tests/org_privacy_test.sql`) creates a fake admin, founder, manager and three
-  members, checks what each one can see and do, then rolls everything back. **All 47 checks pass.** Run it any time
+  members, checks what each one can see and do, then rolls everything back. **All 62 checks pass.** Run it any time
   with:
   ```
   npx supabase db query --linked -f supabase/tests/org_privacy_test.sql
@@ -136,11 +149,11 @@ calling the database directly gets nothing they aren't allowed to see.
 
 The company version has been live on **keepup.devdeepsaha.in** since October 12, 2026.
 - The database sharing rules, the `org` server function and Bouncy's team mode are all running.
-- The privacy test passed all 47 checks again after launch.
+- The privacy test passes all 62 checks (including Everyone, Teams and Exceptions).
 
 Next steps for the admin:
 1. Open **Admin** and set roles: who is a founder, who is a manager.
-2. In **Who sees whom**, give each founder their people.
+2. Make **Teams**, then in **Who sees whom** give each founder Everyone, their teams, or exceptions.
 3. Invite everyone, a few at a time (the email limit is a few per hour).
 4. Hand out the **Keepup employee guide** so everyone knows how it works.
 

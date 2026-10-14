@@ -113,6 +113,12 @@ interface Props {
   prefill?: { text: string; nonce: number } | null; // start the input with this (e.g. "@tomboy ")
 }
 
+// Phones and tablets: no hover and a coarse pointer.
+const isTouch = () => typeof window !== 'undefined' && window.matchMedia('(hover: none) and (pointer: coarse)').matches;
+// Screen capture isn't available on phones.
+const canScreenshot = typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getDisplayMedia;
+const SEND_UP = 'M12 19V5M5 12l7-7 7 7';
+
 export default function AssistantPanel({ workspace, tasks, otherTasks = [], spaces = [], open, onOpenChange, onChanged, prefill }: Props) {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [chatTitle, setChatTitle] = useState<string | null>(null);
@@ -518,7 +524,7 @@ export default function AssistantPanel({ workspace, tasks, otherTasks = [], spac
         return;
       }
     }
-    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && !isTouch()) {
       e.preventDefault();
       send(text);
     }
@@ -634,7 +640,7 @@ export default function AssistantPanel({ workspace, tasks, otherTasks = [], spac
                         className={`shrink-0 font-display text-[0.6875rem] cursor-pointer transition-opacity ${
                           confirmDeleteId === c.id
                             ? 'text-red-500 opacity-100'
-                            : 'text-[var(--text-muted)] opacity-0 group-hover/chat:opacity-100 focus:opacity-100 hover:text-red-500'
+                            : 'text-[var(--text-muted)] opacity-0 group-hover/chat:opacity-100 focus:opacity-100 touch:opacity-100 hover:text-red-500'
                         }`}
                         aria-label="Delete chat"
                       >
@@ -835,7 +841,7 @@ export default function AssistantPanel({ workspace, tasks, otherTasks = [], spac
                     type="button"
                     aria-label="Remove image"
                     onClick={() => setImages((prev) => prev.filter((_, j) => j !== i))}
-                    className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-[var(--text-main)] text-[var(--bg-color)] flex items-center justify-center opacity-0 group-hover/att:opacity-100 focus:opacity-100 transition-opacity cursor-pointer"
+                    className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-[var(--text-main)] text-[var(--bg-color)] flex items-center justify-center opacity-0 group-hover/att:opacity-100 focus:opacity-100 touch:opacity-100 transition-opacity cursor-pointer"
                   >
                     <Icon d={CLOSE} className="w-3 h-3" />
                   </button>
@@ -890,7 +896,8 @@ export default function AssistantPanel({ workspace, tasks, otherTasks = [], spac
                 ref={textarea}
                 value={text}
                 rows={1}
-                autoFocus
+                autoFocus={!isTouch()}
+                enterKeyHint={isTouch() ? 'enter' : 'send'}
                 onChange={(e) => updateText(e.target.value, e.target.selectionStart ?? e.target.value.length)}
                 onClick={(e) => setPicker(mentionAt(text, e.currentTarget.selectionStart ?? text.length))}
                 onKeyDown={onKeyDown}
@@ -927,6 +934,7 @@ export default function AssistantPanel({ workspace, tasks, otherTasks = [], spac
                   >
                     <Icon d={IMAGE} /> Add photos or images
                   </button>
+                  {canScreenshot && (
                   <button
                     type="button"
                     onClick={takeScreenshot}
@@ -934,6 +942,7 @@ export default function AssistantPanel({ workspace, tasks, otherTasks = [], spac
                   >
                     <Icon d={MONITOR} /> Take screenshot
                   </button>
+                  )}
                 </div>
               )}
               <input
@@ -949,15 +958,16 @@ export default function AssistantPanel({ workspace, tasks, otherTasks = [], spac
               />
               <span className="font-display text-xs text-[var(--text-muted)] px-1">
                 <kbd className="border border-[var(--line-color)] rounded px-1">@</kbd> to tag a task
+                <span className="hidden touch:inline"> · ↑ sends</span>
               </span>
             </div>
             <button
               type="submit"
               disabled={!canSend}
               aria-label="Send"
-              className="w-8 h-8 rounded-lg flex items-center justify-center bg-[var(--text-main)] text-[var(--bg-color)] disabled:bg-[var(--line-color)] disabled:text-[var(--text-muted)] transition-colors cursor-pointer disabled:cursor-default"
+              className="w-8 h-8 touch:w-10 touch:h-10 rounded-lg touch:rounded-full flex items-center justify-center bg-[var(--text-main)] text-[var(--bg-color)] disabled:bg-[var(--line-color)] disabled:text-[var(--text-muted)] transition-colors cursor-pointer disabled:cursor-default"
             >
-              {pending ? <Spinner /> : <Icon d={ENTER} />}
+              {pending ? <Spinner /> : <Icon d={isTouch() ? SEND_UP : ENTER} />}
             </button>
           </div>
         </form>

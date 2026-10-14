@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { orgAction, ROLE_LABEL, useOrg, type Member, type Role } from '../lib/org';
 import { describeEvent, timeAgo, type TaskEvent } from '../lib/notices';
 import AccessEditor from './AccessEditor';
+import TeamsEditor from './TeamsEditor';
 
 // The admin's panel: invite people, set roles, decide whose work each founder (and manager) sees,
 // remove leavers, and read the change history. Nobody's Personal space or Bouncy chats are visible here.
@@ -218,14 +219,23 @@ export default function AdminView({ userId }: { userId: string }) {
       <section>
         {sectionTitle('Who sees whom')}
         <p className="mt-2 mb-4 text-sm text-[var(--text-muted)]">
-          Founders see only the people you give them here. Founders then give their managers people from their own list. You see
-          everyone’s Mint-more work already.
+          Pick a founder or manager, then give them <b>Everyone</b>, whole <b>teams</b>, or single people. Use exceptions for “everyone
+          except…”. Founders pass on people from their own reach to their managers. You already see everyone’s Mint-more work.
         </p>
         <AccessEditor
           viewers={viewers}
           subjects={org.members.filter((m) => m.status !== 'removed')}
           emptyText="No founders or managers yet. Give someone the Founder or Manager role above."
         />
+      </section>
+
+      <section>
+        {sectionTitle('Teams', org.teams.length)}
+        <p className="mt-2 mb-4 text-sm text-[var(--text-muted)]">
+          Groups of people (Design, Dev, Content…). Give a founder or manager a whole team at once; new team members are included
+          automatically.
+        </p>
+        <TeamsEditor />
       </section>
 
       <section>

@@ -2,6 +2,8 @@
 
 /* `dark:` follows the app's own theme setting (data-theme on <html>), not just the OS. */
 @custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+/* Phones and tablets (no mouse): things that normally appear on hover are always shown. */
+@custom-variant touch (@media (hover: none));
 
 :root {
   --bg-color: #f7f7f5; /* Warm off-white */

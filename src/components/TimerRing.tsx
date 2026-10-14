@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { Timer } from '../lib/tasks';
 
@@ -69,6 +69,13 @@ export default function TimerRing({ timer, details, size = 22 }: Props) {
     setPos({ top: above ? r.top - 8 : r.bottom + 8, left, above });
   };
   const hide = () => setPos(null);
+  // The card is pinned to the screen, so it goes away once the page moves.
+  useEffect(() => {
+    if (!pos) return;
+    const close = () => setPos(null);
+    window.addEventListener('scroll', close, { passive: true, capture: true });
+    return () => window.removeEventListener('scroll', close, { capture: true });
+  }, [pos]);
 
   return (
     <>
@@ -81,7 +88,14 @@ export default function TimerRing({ timer, details, size = 22 }: Props) {
         onMouseLeave={hide}
         onFocus={show}
         onBlur={hide}
-        onClick={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.stopPropagation();
+          // Touch: a second tap closes it.
+          if (pos && window.matchMedia('(hover: none)').matches) {
+            hide();
+            anchor.current?.blur();
+          }
+        }}
         className="inline-flex rounded-full outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
       >
         <Ring timer={timer} size={size} />

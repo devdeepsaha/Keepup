@@ -17,13 +17,17 @@
 | `chats`, `chat_messages` | Bouncy conversations | Owner only |
 | `spaces`, `client_colors` | Custom spaces, client colours | Owner only |
 | `members` | Everyone in the company: display name, roles, status (invited / active / removed) | All signed-in people (names and roles only, no emails) |
-| `access` | Who can see whom: viewer, person, level (`view` / `plan`) | The viewer, the person, the admin, and founders for their own people |
+| `access` | Person exceptions: viewer, person, level (`none` / `view` / `plan`) | The viewer, the person, the admin, founders |
+| `viewer_scope` | "Everyone" for a viewer, at view or plan | The viewer, the admin, founders |
+| `teams`, `team_members` | Teams and who is in them | All signed-in people |
+| `team_access` | A viewer's level on a whole team | The viewer, the admin, founders |
 | `invites` | Pending invites | Server only |
 | `task_events` | Notices and change history | The person notified; the admin sees all |
 
 ## The privacy rules (row-level security)
 The database checks every request against these rules, so the app can't show more than allowed even by mistake.
-- **`can_see(person, level)`:** true if it's you, if you're an active admin, or if an `access` row gives you that person at that level (Plan includes View).
+- **`can_see(person, level)`:** uses `access_level(viewer, person)` (0 none, 1 view, 2 plan). It is 2 for yourself and for an active admin. Otherwise the most specific rule wins: a person exception (`access`), then the best team (`team_access`), then Everyone (`viewer_scope`, which never includes an admin).
+- **Rules can't over-share:** every rule is capped by what its setter can see (`grant_cap`). A founder's "Everyone at Plan" for a manager only reaches people the founder can see, at the founder's own level. Rules set by a founder who loses the role or leaves stop working by themselves.
 - **Tasks:**
   - **read:** your own, or a Mint-more task of someone you can see;
   - **edit:** your own, or a Mint-more task of someone you plan for;
@@ -37,7 +41,9 @@ The database checks every request against these rules, so the app can't show mor
 - **Planned updates (`planned_guard`):** always belong to the task's owner, even when a planner writes them.
 - **Rules for running the company** (database functions; the app calls them as the signed-in person):
   - `org_set_roles`: the admin can set any role. A founder can make people they can see managers or members, but can't touch admins or founders, and can't change their own roles. You can't remove your own admin role.
-  - `org_set_access`: the admin can give anyone access to anyone. A founder can only give managers people the founder can see, and no higher than the founder's own level.
+  - `org_set_access` (person exception), `org_set_scope` (Everyone) and `org_set_team_access` (team): the admin can set them for anyone. A founder can only set them for managers.
+  - `org_save_team`, `org_delete_team`, `org_set_team_member`: admin only.
+  - `org_my_people` / `org_people_of`: who you, or a given viewer, end up seeing (for the Team page and the access summary).
   - `org_remove` / `org_restore`: admin only. A removed person loses all access, and their tasks stay.
   - `org_handover`: moves someone's open Mint-more tasks, with their logs and planned updates, to another person. You need Plan access to both people.
   - `org_hello`: run at sign-in. It saves your name and activates an invited account.
@@ -55,13 +61,14 @@ The database checks every request against these rules, so the app can't show mor
 | `supabase/migrations/014_org.sql` | Company tables, `is_admin`, `can_see`, admin bootstrap |
 | `supabase/migrations/015_org_policies.sql` | Sharing rules, guards, notices, company functions |
 | `supabase/migrations/016_org_live.sql` | Removed the rollout switch (applied at launch) |
-| `supabase/tests/org_privacy_test.sql` | Automated privacy test (47 checks; everything rolled back) |
+| `supabase/migrations/017_access_groups.sql` | Everyone, Teams, exceptions and the resolver |
+| `supabase/tests/org_privacy_test.sql` | Automated privacy test (62 checks; everything rolled back) |
 | `supabase/functions/org/` | Invite / remove server function |
 | `supabase/functions/agenda-ai/` | Bouncy, including team mode (`loadTeam`) |
 | `src/lib/org.tsx` | Who you are, your roles, the people you can see |
 | `src/components/TeamView.tsx`, `PersonView.tsx`, `AdminView.tsx` | Team board, a person's list, admin panel |
 | `src/components/AssignmentCard.tsx`, `NoticesBell.tsx`, `WelcomePrompt.tsx` | Accept/decline, notices, first sign-in |
-| `src/components/AccessEditor.tsx` | The None / View / Plan picker |
+| `src/components/AccessEditor.tsx`, `TeamsEditor.tsx` | Who sees whom (Everyone, Teams, Exceptions) and the teams themselves |
 | `docs/` | This guide and the employee guide |
 
 ## Everyday commands

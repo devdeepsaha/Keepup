@@ -255,13 +255,12 @@ export default function TeamView({ userId, onOpenPerson }: { userId: string; onO
             <span className="text-sm text-[var(--text-muted)] font-medium">{managers.length}</span>
           </div>
           <p className="mt-2 mb-4 text-sm text-[var(--text-muted)]">
-            Give each manager the people they look after. View: they see the work. Plan: they can also edit it and assign tasks. You can
-            only share people you can see yourself.
+            Give each manager the people they look after: everyone you can see, whole teams, or single people. View: they see the work. Plan: they can also edit it and assign tasks. They never get more than you have.
           </p>
           <AccessEditor
             viewers={managers}
             subjects={org.people.map((p) => p.member)}
-            maxLevel={(id) => org.levelFor(id) ?? 'view'}
+            founderMode
             emptyText="No managers yet. Use “Make manager” on someone’s card above."
           />
         </section>

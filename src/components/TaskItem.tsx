@@ -155,7 +155,16 @@ export default function TaskItem({
   const timer = timerFor(task, now, todayKey, scope);
   const waiting = !!task.waiting_since;
   const waitingDays = waiting ? daysSince(task.waiting_since!, now) : 0;
-  const titleType = urgencyType(timer.progress);
+  const titleType = urgencyType(waiting ? 0 : timer.progress); // on hold: quiet, whatever the clock says
+
+  // Put on hold (or taken off) while open: it moves section, so follow it there.
+  const wasWaiting = useRef(waiting);
+  useEffect(() => {
+    if (wasWaiting.current === waiting) return;
+    wasWaiting.current = waiting;
+    if (isOpen) window.setTimeout(() => root.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 80);
+  }, [waiting, isOpen]);
+
 
   // Shown in the ring's hover card.
   const quietDays = daysSince(task.last_updated, now);
@@ -348,6 +357,22 @@ export default function TaskItem({
                     <TimerRing timer={timer} details={details} />
                   </span>
                 )}
+                {canEdit && (
+                  <button
+                    aria-label="More actions"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSheet(true);
+                    }}
+                    className="hidden touch:flex h-7 w-7 -my-1 items-center justify-center rounded-full text-[var(--text-muted)] active:bg-[var(--line-color)]"
+                  >
+                    <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
+                      <circle cx="5" cy="12" r="1.8" />
+                      <circle cx="12" cy="12" r="1.8" />
+                      <circle cx="19" cy="12" r="1.8" />
+                    </svg>
+                  </button>
+                )}
                 {/* Quick delete: appears on hover; first click asks, second moves it to the trash. */}
                 {isOwner && (
                 <button
@@ -406,6 +431,7 @@ export default function TaskItem({
                     value={updateText}
                     onChange={(e) => setUpdateText(e.target.value)}
                     placeholder="What's the latest?"
+                    enterKeyHint="send"
                     maxLength={2000}
                     className="w-full min-w-0 bg-transparent border-none text-sm outline-none clean-input py-1"
                   />
@@ -440,7 +466,7 @@ export default function TaskItem({
                         <button
                           aria-label="Delete log"
                           onClick={() => onDeleteUpdate(task.id, update.id)}
-                          className="text-[var(--text-muted)] opacity-0 group-hover/log:opacity-100 focus:opacity-100 hover:text-red-500 transition-all text-sm cursor-pointer"
+                          className="text-[var(--text-muted)] opacity-0 group-hover/log:opacity-100 focus:opacity-100 touch:opacity-100 touch:px-2 hover:text-red-500 transition-all text-sm cursor-pointer"
                         >
                           ×
                         </button>

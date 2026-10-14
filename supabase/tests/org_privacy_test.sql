@@ -245,6 +245,54 @@ end $$;
 select pg_temp.act('aaaaaaaa-0000-4000-8000-000000000005');
 select pg_temp.expect('others never see someone''s notices', (select count(*) = 0 from public.task_events where notify_id <> 'aaaaaaaa-0000-4000-8000-000000000005'));
 
+-- ===== Everyone / teams / exceptions (017) =====
+create function pg_temp.sees(subject uuid, need text default 'view') returns boolean language sql as $$ select public.can_see(subject, need); $$;
+grant execute on function pg_temp.sees(uuid, text) to authenticated;
+
+select pg_temp.act('aaaaaaaa-0000-4000-8000-000000000001');
+select public.org_set_scope('aaaaaaaa-0000-4000-8000-000000000002', 'view');
+select pg_temp.act('aaaaaaaa-0000-4000-8000-000000000002');
+select pg_temp.expect('Everyone: the founder now sees people they weren''t given one by one', pg_temp.sees('aaaaaaaa-0000-4000-8000-000000000006'));
+select pg_temp.expect('Everyone never includes the admin', not pg_temp.sees('aaaaaaaa-0000-4000-8000-000000000001'));
+select pg_temp.expect('a person rule still wins over Everyone (X stays at plan)', pg_temp.sees('aaaaaaaa-0000-4000-8000-000000000004', 'plan'));
+select pg_temp.expect('Everyone still never shows a Personal task', (select count(*) = 0 from public.tasks where text in ('T:X-personal', 'T:Y-personal', 'T:A-personal')));
+
+select pg_temp.act('aaaaaaaa-0000-4000-8000-000000000001');
+select public.org_set_access('aaaaaaaa-0000-4000-8000-000000000002', 'aaaaaaaa-0000-4000-8000-000000000006', 'none');
+select pg_temp.act('aaaaaaaa-0000-4000-8000-000000000002');
+select pg_temp.expect('Everyone except Z: an exception hides one person', not pg_temp.sees('aaaaaaaa-0000-4000-8000-000000000006'));
+select pg_temp.expect('Z''s Mint-more task is hidden from the founder again', (select count(*) = 0 from public.tasks where text = 'T:Z-mint'));
+
+select pg_temp.act('aaaaaaaa-0000-4000-8000-000000000001');
+select public.org_save_team(null, 'Design');
+select public.org_set_team_member((select id from public.teams where name = 'Design'), 'aaaaaaaa-0000-4000-8000-000000000005', true);
+select public.org_set_team_access('aaaaaaaa-0000-4000-8000-000000000002', (select id from public.teams where name = 'Design'), 'plan');
+select pg_temp.act('aaaaaaaa-0000-4000-8000-000000000002');
+select pg_temp.expect('a person rule beats a team (Y stays view)', not pg_temp.sees('aaaaaaaa-0000-4000-8000-000000000005', 'plan'));
+select pg_temp.act('aaaaaaaa-0000-4000-8000-000000000001');
+select public.org_set_access('aaaaaaaa-0000-4000-8000-000000000002', 'aaaaaaaa-0000-4000-8000-000000000005', null);
+select pg_temp.act('aaaaaaaa-0000-4000-8000-000000000002');
+select pg_temp.expect('Team: plan access to the Design team gives plan on its members', pg_temp.sees('aaaaaaaa-0000-4000-8000-000000000005', 'plan'));
+do $$ begin
+  perform public.org_save_team(null, 'Founders club');
+  perform pg_temp.expect('only the admin manages teams', false);
+exception when others then perform pg_temp.expect('only the admin manages teams', true, sqlerrm);
+end $$;
+do $$ begin
+  perform public.org_set_scope('aaaaaaaa-0000-4000-8000-000000000002', 'plan');
+  perform pg_temp.expect('a founder cannot widen their own access', false);
+exception when others then perform pg_temp.expect('a founder cannot widen their own access', true, sqlerrm);
+end $$;
+
+-- The founder gives their manager Everyone at plan: capped by what the founder has.
+select public.org_set_scope('aaaaaaaa-0000-4000-8000-000000000003', 'plan');
+select pg_temp.expect('founder can preview what their manager sees', (select count(*) > 0 from public.org_people_of('aaaaaaaa-0000-4000-8000-000000000003')));
+select pg_temp.act('aaaaaaaa-0000-4000-8000-000000000003');
+select pg_temp.expect('manager''s Everyone = everyone the founder sees (Y at plan via the founder''s team)', pg_temp.sees('aaaaaaaa-0000-4000-8000-000000000005', 'plan'));
+select pg_temp.expect('manager can''t see who the founder can''t (Z)', not pg_temp.sees('aaaaaaaa-0000-4000-8000-000000000006'));
+select pg_temp.expect('manager''s Everyone includes the founder who set it', pg_temp.sees('aaaaaaaa-0000-4000-8000-000000000002'));
+select pg_temp.expect('manager''s person rule still wins (X stays view)', not pg_temp.sees('aaaaaaaa-0000-4000-8000-000000000004', 'plan'));
+
 -- Roles: a founder makes someone they can see a manager; losing every viewing role removes what they could see.
 select pg_temp.act('aaaaaaaa-0000-4000-8000-000000000002');
 select public.org_set_roles('aaaaaaaa-0000-4000-8000-000000000004', '{manager,member}');

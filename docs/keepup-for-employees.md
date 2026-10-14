@@ -28,6 +28,8 @@ Nobody can see your Personal space or your Bouncy chats. That includes the admin
 - **Add a task:** type it in the box at the top of Mint-more.
 - **Log an update:** open a task and write what happened. Only you can log on your tasks.
 - **Needs attention:** this section lists tasks that are late, or where a client check-in was missed.
+- **On hold:** waiting on the client? Open the task, tap **Edit**, then **On hold?**. It moves to On hold straight away.
+- **On a phone:** tap **⋯** on a task (or press and hold it) for all its actions. In Bouncy, Enter starts a new line; tap the **↑** button to send.
 - **Planned client updates:** messages ready to send on certain days. Copy one, send it, then tap **Mark sent**.
 
 ## Tasks given to you

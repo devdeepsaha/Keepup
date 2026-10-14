@@ -297,7 +297,7 @@ function Bars({ values, labels, highlight, format }: { values: number[]; labels:
     <div className="flex h-32 gap-1">
       {values.map((v, i) => (
         <div key={i} className="group flex flex-1 flex-col items-center gap-1" title={`${labels[i]}: ${format ? format(v) : v}`}>
-          <span className="font-display text-[0.625rem] tabular-nums text-[var(--text-muted)] opacity-0 group-hover:opacity-100">{v || ''}</span>
+          <span className="font-display text-[0.625rem] tabular-nums text-[var(--text-muted)] opacity-0 group-hover:opacity-100 touch:opacity-100">{v || ''}</span>
           <div className="relative w-full flex-1">
             <div
               className={`absolute inset-x-0 bottom-0 rounded-t-md transition-all ${i === highlight ? 'bg-accent-gradient' : 'bg-[var(--accent)]/25'}`}

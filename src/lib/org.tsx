@@ -20,9 +20,28 @@ export interface Member {
 export interface AccessRow {
   viewer_id: string;
   subject_id: string;
-  level: Level;
+  level: Level | 'none'; // 'none': an exception that hides this person
   granted_by: string | null;
   created_at: string;
+}
+
+export interface Team {
+  id: string;
+  name: string;
+  members: string[]; // user ids
+}
+
+// Broader rules for a founder or manager: "Everyone" and teams (person rows are the exceptions).
+export interface TeamAccessRow {
+  viewer_id: string;
+  team_id: string;
+  level: Level;
+  granted_by: string | null;
+}
+export interface ScopeRow {
+  viewer_id: string;
+  level: Level;
+  granted_by: string | null;
 }
 
 export interface Person {
@@ -34,7 +53,10 @@ interface OrgValue {
   ready: boolean;
   me: Member | null;
   members: Member[];
-  access: AccessRow[]; // the rows you're allowed to read
+  access: AccessRow[]; // the person rules you're allowed to read
+  teams: Team[];
+  teamAccess: TeamAccessRow[];
+  scopes: ScopeRow[];
   people: Person[]; // colleagues whose Mint-more work you can see
   isAdmin: boolean;
   isFounder: boolean;
@@ -61,17 +83,34 @@ export const nameFromEmail = (email: string) =>
 export function OrgProvider({ user, children }: { user: User; children: ReactNode }) {
   const [members, setMembers] = useState<Member[]>([]);
   const [access, setAccess] = useState<AccessRow[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [teamAccess, setTeamAccess] = useState<TeamAccessRow[]>([]);
+  const [scopes, setScopes] = useState<ScopeRow[]>([]);
+  // Who you can see, worked out by the database from every rule (Everyone, teams, exceptions).
+  const [mine, setMine] = useState<{ user_id: string; level: Level }[]>([]);
   const [ready, setReady] = useState(false);
   // The admin also gets everyone's email, so people who haven't set a name yet still show as someone.
   const [emailNames, setEmailNames] = useState<Map<string, string>>(new Map());
 
   const refresh = useCallback(async () => {
-    const [m, a] = await Promise.all([
+    const [m, a, t, tm, ta, sc, my] = await Promise.all([
       supabase.from('members').select('user_id, display_name, roles, status, invited_by, created_at').order('created_at'),
       supabase.from('access').select('viewer_id, subject_id, level, granted_by, created_at'),
+      supabase.from('teams').select('id, name').order('name'),
+      supabase.from('team_members').select('team_id, user_id'),
+      supabase.from('team_access').select('viewer_id, team_id, level, granted_by'),
+      supabase.from('viewer_scope').select('viewer_id, level, granted_by'),
+      supabase.rpc('org_my_people'),
     ]);
     if (m.data) setMembers(m.data as Member[]);
     if (a.data) setAccess(a.data as AccessRow[]);
+    if (t.data) {
+      const rows = (tm.data ?? []) as { team_id: string; user_id: string }[];
+      setTeams((t.data as { id: string; name: string }[]).map((x) => ({ ...x, members: rows.filter((r) => r.team_id === x.id).map((r) => r.user_id) })));
+    }
+    if (ta.data) setTeamAccess(ta.data as TeamAccessRow[]);
+    if (sc.data) setScopes(sc.data as ScopeRow[]);
+    if (my.data) setMine(my.data as { user_id: string; level: Level }[]);
     // (Returns nothing for anyone but the admin.)
     const { data: emails } = await supabase.rpc('org_emails');
     if (emails) setEmailNames(new Map((emails as { user_id: string; email: string }[]).map((e) => [e.user_id, nameFromEmail(e.email)])));
@@ -85,6 +124,10 @@ export function OrgProvider({ user, children }: { user: User; children: ReactNod
       .channel(`org-${user.id}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'members' }, () => refresh())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'access' }, () => refresh())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'teams' }, () => refresh())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'team_members' }, () => refresh())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'team_access' }, () => refresh())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'viewer_scope' }, () => refresh())
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
@@ -101,9 +144,7 @@ export function OrgProvider({ user, children }: { user: User; children: ReactNod
     if (isAdmin) {
       people = members.filter((m) => m.user_id !== user.id).map((member) => ({ member, level: 'plan' as Level }));
     } else if (active) {
-      people = access
-        .filter((a) => a.viewer_id === user.id && byId.has(a.subject_id))
-        .map((a) => ({ member: byId.get(a.subject_id)!, level: a.level }));
+      people = mine.filter((p) => byId.has(p.user_id)).map((p) => ({ member: byId.get(p.user_id)!, level: p.level }));
     } else people = [];
     people.sort((a, b) => (a.member.display_name || emailNames.get(a.member.user_id) || '').localeCompare(b.member.display_name || emailNames.get(b.member.user_id) || ''));
     const levels = new Map(people.map((p) => [p.member.user_id, p.level]));
@@ -112,6 +153,9 @@ export function OrgProvider({ user, children }: { user: User; children: ReactNod
       me,
       members,
       access,
+      teams,
+      teamAccess,
+      scopes,
       people,
       isAdmin,
       isFounder: has('founder'),
@@ -132,7 +176,7 @@ export function OrgProvider({ user, children }: { user: User; children: ReactNod
         return null;
       },
     };
-  }, [members, access, ready, user.id, refresh, emailNames]);
+  }, [members, access, teams, teamAccess, scopes, mine, ready, user.id, refresh, emailNames]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
@@ -143,6 +187,9 @@ const SOLO: OrgValue = {
   me: null,
   members: [],
   access: [],
+  teams: [],
+  teamAccess: [],
+  scopes: [],
   people: [],
   isAdmin: false,
   isFounder: false,

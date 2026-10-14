@@ -294,7 +294,7 @@ export default function Shell({ user }: { user: User }) {
   const attentionCount = useMemo(() => {
     const todayKey = dayKey(new Date(now));
     const scopes = rhythmScopes(tasks);
-    return tasks.filter((t) => !t.done && attentionFor(t, now, todayKey, scopes.get(t.id))).length;
+    return tasks.filter((t) => !t.done && !t.waiting_since && attentionFor(t, now, todayKey, scopes.get(t.id))).length;
   }, [tasks, now]);
   const sidebarWidth = collapsed ? SIDEBAR_ICON_WIDTH : width;
 

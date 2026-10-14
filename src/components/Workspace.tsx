@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import type { PlannedUpdate, Task, TaskLink } from '../types';
-import { dayKey } from '../lib/dates';
+import { dayKey, keyToDate } from '../lib/dates';
 import { attentionFor, byDueThenOldest, useNow, type Attention } from '../lib/tasks';
 import { rhythmScopes, taskHandles } from '../lib/handles';
 import TaskItem from './TaskItem';
@@ -73,16 +73,24 @@ export default function Workspace({
   // A task whose panel is open keeps its section and position (the attention it had when opened),
   // so logging an update doesn't make it jump away mid-edit.
   // `ready` is false while the opened task hasn't loaded yet (e.g. just switched space to open it).
-  const [pin, setPin] = useState<{ id: string | null; attention: Attention | null; ready: boolean }>({ id: null, attention: null, ready: true });
+  // Putting it on hold (or back) is the exception: it moves to its new section right away.
+  const [pin, setPin] = useState<{ id: string | null; attention: Attention | null; ready: boolean; waiting: boolean }>({
+    id: null,
+    attention: null,
+    ready: true,
+    waiting: false,
+  });
   const openTask = openId ? tasks.find((t) => t.id === openId) : undefined;
-  if (pin.id !== openId || (!pin.ready && openTask)) {
-    // A different task was opened (or it closed, or it just loaded): pin it where it is now.
+  if (pin.id !== openId || (!pin.ready && openTask) || (openTask && !!openTask.waiting_since !== pin.waiting)) {
+    // A different task was opened (or it closed, or it just loaded, or went on hold): pin it where it is now.
     setPin({
       id: openId,
       attention: openTask ? attentionFor(openTask, now, todayKey, rhythmScopes(tasks).get(openTask.id)) : null,
       ready: !openId || !!openTask,
+      waiting: !!openTask?.waiting_since,
     });
   }
+  const dueInput = useRef<HTMLInputElement>(null);
 
   // Press N anywhere to jump to the capture input.
   useEffect(() => {
@@ -112,12 +120,13 @@ export default function Workspace({
   const entries: Entry[] = tasks
     .filter((t) => !t.done)
     .map((task) => ({ task, attention: task.id === pin.id && pin.ready ? pin.attention : attentionFor(task, now, todayKey, scopes.get(task.id)) }));
-  const needsAttention = entries.filter((e) => e.attention).sort((a, b) => b.attention!.score - a.attention!.score);
+  // On hold always means On hold: held tasks are parked there (anything still due shows on the task itself).
+  const needsAttention = entries.filter((e) => e.attention && !e.task.waiting_since).sort((a, b) => b.attention!.score - a.attention!.score);
   const inProgress = entries.filter((e) => !e.attention && !e.task.waiting_since).sort((a, b) => byDueThenOldest(a.task, b.task));
-  // Blocked on the client, nothing due yet: parked here (they move to Needs attention on nudge days).
+  // Blocked on the client: the ones with something due (a nudge day, a planned update) first.
   const waitingOn = entries
-    .filter((e) => !e.attention && e.task.waiting_since)
-    .sort((a, b) => a.task.waiting_since!.localeCompare(b.task.waiting_since!));
+    .filter((e) => e.task.waiting_since)
+    .sort((a, b) => (b.attention?.score ?? 0) - (a.attention?.score ?? 0) || a.task.waiting_since!.localeCompare(b.task.waiting_since!));
 
   const isFirstRun = !loading && tasks.length === 0 && !pendingMine.length;
   const others = mode !== 'own';
@@ -198,7 +207,7 @@ export default function Workspace({
       {mode !== 'view' && (
       <form
         onSubmit={handleAddTask}
-        className="mb-8 flex flex-wrap items-center gap-x-4 gap-y-2 border-b-2 border-[var(--line-color)] focus-within:border-[var(--accent)] transition-colors"
+        className="mb-8 flex items-center gap-2 sm:gap-3 border-b-2 border-[var(--line-color)] focus-within:border-[var(--accent)] transition-colors"
       >
         <span className="font-display text-xl md:text-2xl text-[var(--text-muted)]">+</span>
         <input
@@ -206,35 +215,72 @@ export default function Workspace({
           type="text"
           value={newTaskText}
           onChange={(e) => setNewTaskText(e.target.value)}
-          placeholder={others ? `Assign a task to ${personName}` : 'Add a task'}
+          placeholder={others ? `Assign to ${personName}` : 'Add a task'}
           maxLength={500}
           autoFocus={isFirstRun}
-          className="flex-1 min-w-[12rem] bg-transparent border-none py-2.5 text-xl md:text-2xl font-display font-medium tracking-tight outline-none clean-input focus:text-[var(--accent)] transition-colors"
+          enterKeyHint="done"
+          className="flex-1 min-w-0 bg-transparent border-none py-2.5 text-xl md:text-2xl font-display font-medium tracking-tight outline-none clean-input focus:text-[var(--accent)] transition-colors"
         />
         {!newTaskText && (
           <kbd className="hidden md:inline font-display text-xs text-[var(--text-muted)] border border-[var(--line-color)] rounded px-1.5 py-0.5">
             N
           </kbd>
         )}
-        <span className="ml-auto flex items-center gap-4 max-sm:w-full max-sm:justify-between">
-        <label className="flex items-center gap-2 font-display text-xs uppercase tracking-wider text-[var(--text-muted)] pb-2 md:pb-0">
-          Due
+        {/* Due date: a small chip that opens the date picker; shows the date once picked. */}
+        <span className="relative flex shrink-0 items-center">
+          <button
+            type="button"
+            onClick={() => {
+              const el = dueInput.current;
+              if (!el) return;
+              try {
+                el.showPicker();
+              } catch {
+                el.focus();
+              }
+            }}
+            aria-label={newDue ? `Due ${newDue}. Change due date` : 'Set a due date'}
+            className={`flex h-9 items-center gap-1.5 rounded-full border px-2.5 font-display text-xs transition-colors cursor-pointer ${
+              newDue ? 'border-[var(--accent)] text-[var(--accent)]' : 'border-[var(--line-color)] text-[var(--text-muted)] hover:text-[var(--text-main)]'
+            }`}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 shrink-0">
+              <path d="M4 5h16v15H4zM4 10h16M8 3v4M16 3v4" />
+            </svg>
+            {newDue ? (
+              keyToDate(newDue).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+            ) : (
+              <span className="max-sm:hidden">Due</span>
+            )}
+          </button>
+          {newDue && (
+            <button
+              type="button"
+              onClick={() => setNewDue('')}
+              aria-label="Clear due date"
+              className="ml-0.5 flex h-7 w-7 items-center justify-center rounded-full text-[var(--text-muted)] hover:text-red-500 cursor-pointer"
+            >
+              ×
+            </button>
+          )}
           <input
+            ref={dueInput}
             type="date"
+            tabIndex={-1}
+            aria-hidden
             value={newDue}
             min={todayKey}
             onChange={(e) => setNewDue(e.target.value)}
-            className={`bg-transparent outline-none text-sm normal-case tracking-normal ${newDue ? 'text-[var(--text-main)]' : 'text-[var(--placeholder)]'}`}
+            className="pointer-events-none absolute bottom-0 left-0 h-px w-px opacity-0"
           />
-        </label>
+        </span>
         <button
           type="submit"
           disabled={!newTaskText.trim()}
-          className="font-display font-semibold uppercase tracking-widest text-sm text-[var(--text-main)] disabled:text-[var(--line-color)] hover:text-[var(--accent)] transition-colors cursor-pointer disabled:cursor-default pb-2 md:pb-0"
+          className="shrink-0 h-9 rounded-full bg-[var(--text-main)] px-4 font-display text-sm font-semibold text-[var(--bg-color)] hover:bg-[image:var(--accent-gradient)] hover:text-white disabled:bg-transparent disabled:border disabled:border-[var(--line-color)] disabled:text-[var(--text-muted)] disabled:hover:bg-none transition-colors cursor-pointer disabled:cursor-default"
         >
           {others ? 'Assign' : 'Add'}
         </button>
-        </span>
       </form>
       )}
 
