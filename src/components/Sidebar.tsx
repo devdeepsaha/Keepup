@@ -329,7 +329,7 @@ export default function Sidebar({
             views: ['admin'] as View[],
             label: 'Admin',
             icon: SHIELD,
-            sub: [{ label: 'People and access', go: () => onNavigate('admin') }],
+            sub: [{ label: 'People, teams & access', go: () => onNavigate('admin') }],
           },
         ]
       : []),
