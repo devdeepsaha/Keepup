@@ -130,7 +130,9 @@ export default function AssistantPanel({ workspace, tasks, otherTasks = [], spac
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [text, setText] = useState('');
   const [listening, setListening] = useState(false);
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const recognitionRef = useRef<any>(null);
+  const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Phones: when the keyboard opens, fit the panel to the visible area above it, so the header stays put
   // and only the input rises with the keyboard (instead of the whole page scrolling up).
   const [viewport, setViewport] = useState<{ top: number; height: number } | null>(null);
@@ -181,6 +183,7 @@ export default function AssistantPanel({ workspace, tasks, otherTasks = [], spac
   const backdrop = useRef<HTMLDivElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const threadEnd = useRef<HTMLDivElement>(null);
+  const sendRef = useRef<((msg: string) => void) | null>(null);
   const sending = useRef(false); // blocks a second send before `pending` state has updated
   const chatId = useRef<string | null>(null); // saved chat the conversation belongs to
   const chatReady = useRef<Promise<string> | null>(null); // resolves to the current chat's id once it exists
@@ -391,10 +394,12 @@ export default function AssistantPanel({ workspace, tasks, otherTasks = [], spac
   };
 
   const toggleMic = () => {
-    const SR = (window as typeof window & { SpeechRecognition?: typeof SpeechRecognition; webkitSpeechRecognition?: typeof SpeechRecognition }).SpeechRecognition
-      ?? (window as typeof window & { webkitSpeechRecognition?: typeof SpeechRecognition }).webkitSpeechRecognition;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const w = window as any;
+    const SR = w.SpeechRecognition ?? w.webkitSpeechRecognition;
     if (!SR) return;
     if (listening) {
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
       recognitionRef.current?.stop();
       setListening(false);
       return;
@@ -404,21 +409,38 @@ export default function AssistantPanel({ workspace, tasks, otherTasks = [], spac
     r.interimResults = true;
     r.lang = 'en-US';
     let base = text;
-    r.onresult = (e) => {
-      const transcript = Array.from(e.results).map((res) => res[0].transcript).join('');
-      setText(base + transcript);
+    let finalTranscript = text;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    r.onresult = (e: any) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const transcript = Array.from(e.results as any[]).map((res: any) => res[0].transcript).join('');
+      finalTranscript = base + transcript;
+      setText(finalTranscript);
+      // Reset 2-second silence timer on every speech result
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = setTimeout(() => {
+        recognitionRef.current?.stop();
+      }, 2000);
     };
-    r.onend = () => { setListening(false); base = ''; };
-    r.onerror = () => { setListening(false); base = ''; };
+    r.onend = () => {
+      setListening(false);
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+      // Auto-send if there's a transcript
+      const trimmed = finalTranscript.trim();
+      if (trimmed) {
+        setText('');
+        sendRef.current?.(trimmed);
+      }
+      base = '';
+    };
+    r.onerror = () => { setListening(false); if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current); base = ''; };
     recognitionRef.current = r;
     r.start();
     setListening(true);
   };
 
-  const hasSpeech = !!(
-    (window as typeof window & { SpeechRecognition?: unknown }).SpeechRecognition ??
-    (window as typeof window & { webkitSpeechRecognition?: unknown }).webkitSpeechRecognition
-  );
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const hasSpeech = !!((window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition);
 
   const send = async (message: string) => {
     const msg = message.trim();
@@ -479,6 +501,7 @@ export default function AssistantPanel({ workspace, tasks, otherTasks = [], spac
     setEntries((prev) => [...prev, reply]);
     persist([reply]);
   };
+  sendRef.current = send;
 
   const undo = async (entryId: string, index: number) => {
     const entry = entries.find((e) => e.id === entryId);
