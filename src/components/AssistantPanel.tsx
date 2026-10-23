@@ -118,6 +118,7 @@ const isTouch = () => typeof window !== 'undefined' && window.matchMedia('(hover
 // Screen capture isn't available on phones.
 const canScreenshot = typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getDisplayMedia;
 const SEND_UP = 'M12 19V5M5 12l7-7 7 7';
+const MIC = 'M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3zM19 10v2a7 7 0 0 1-14 0v-2M12 19v3M8 22h8';
 
 export default function AssistantPanel({ workspace, tasks, otherTasks = [], spaces = [], open, onOpenChange, onChanged, prefill }: Props) {
   const [entries, setEntries] = useState<Entry[]>([]);
@@ -128,6 +129,8 @@ export default function AssistantPanel({ workspace, tasks, otherTasks = [], spac
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [text, setText] = useState('');
+  const [listening, setListening] = useState(false);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
   // Phones: when the keyboard opens, fit the panel to the visible area above it, so the header stays put
   // and only the input rises with the keyboard (instead of the whole page scrolling up).
   const [viewport, setViewport] = useState<{ top: number; height: number } | null>(null);
@@ -386,6 +389,36 @@ export default function AssistantPanel({ workspace, tasks, otherTasks = [], spac
       el.setSelectionRange(pos, pos);
     }, 0);
   };
+
+  const toggleMic = () => {
+    const SR = (window as typeof window & { SpeechRecognition?: typeof SpeechRecognition; webkitSpeechRecognition?: typeof SpeechRecognition }).SpeechRecognition
+      ?? (window as typeof window & { webkitSpeechRecognition?: typeof SpeechRecognition }).webkitSpeechRecognition;
+    if (!SR) return;
+    if (listening) {
+      recognitionRef.current?.stop();
+      setListening(false);
+      return;
+    }
+    const r = new SR();
+    r.continuous = true;
+    r.interimResults = true;
+    r.lang = 'en-US';
+    let base = text;
+    r.onresult = (e) => {
+      const transcript = Array.from(e.results).map((res) => res[0].transcript).join('');
+      setText(base + transcript);
+    };
+    r.onend = () => { setListening(false); base = ''; };
+    r.onerror = () => { setListening(false); base = ''; };
+    recognitionRef.current = r;
+    r.start();
+    setListening(true);
+  };
+
+  const hasSpeech = !!(
+    (window as typeof window & { SpeechRecognition?: unknown }).SpeechRecognition ??
+    (window as typeof window & { webkitSpeechRecognition?: unknown }).webkitSpeechRecognition
+  );
 
   const send = async (message: string) => {
     const msg = message.trim();
@@ -961,14 +994,30 @@ export default function AssistantPanel({ workspace, tasks, otherTasks = [], spac
                 <span className="hidden touch:inline"> · ↑ sends</span>
               </span>
             </div>
-            <button
-              type="submit"
-              disabled={!canSend}
-              aria-label="Send"
-              className="w-8 h-8 touch:w-10 touch:h-10 rounded-lg touch:rounded-full flex items-center justify-center bg-[var(--text-main)] text-[var(--bg-color)] disabled:bg-[var(--line-color)] disabled:text-[var(--text-muted)] transition-colors cursor-pointer disabled:cursor-default"
-            >
-              {pending ? <Spinner /> : <Icon d={isTouch() ? SEND_UP : ENTER} />}
-            </button>
+            <div className="flex items-center gap-1">
+              {hasSpeech && (
+                <button
+                  type="button"
+                  aria-label={listening ? 'Stop recording' : 'Dictate'}
+                  onClick={toggleMic}
+                  className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors cursor-pointer ${
+                    listening
+                      ? 'bg-red-500/15 text-red-500 animate-pulse'
+                      : 'text-[var(--text-muted)] hover:bg-[var(--bg-color)] hover:text-[var(--text-main)]'
+                  }`}
+                >
+                  <Icon d={MIC} />
+                </button>
+              )}
+              <button
+                type="submit"
+                disabled={!canSend}
+                aria-label="Send"
+                className="w-8 h-8 touch:w-10 touch:h-10 rounded-lg touch:rounded-full flex items-center justify-center bg-[var(--text-main)] text-[var(--bg-color)] disabled:bg-[var(--line-color)] disabled:text-[var(--text-muted)] transition-colors cursor-pointer disabled:cursor-default"
+              >
+                {pending ? <Spinner /> : <Icon d={isTouch() ? SEND_UP : ENTER} />}
+              </button>
+            </div>
           </div>
         </form>
       </div>
