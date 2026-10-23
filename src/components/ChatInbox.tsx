@@ -16,9 +16,11 @@ interface ConvRow extends Conversation {
 export default function ChatInbox({
   onOpen,
   onNew,
+  activeId,
 }: {
   onOpen: (id: string) => void;
   onNew: () => void;
+  activeId?: string | null;
 }) {
   const org = useOrg();
   const [convs, setConvs] = useState<ConvRow[]>([]);
@@ -120,10 +122,10 @@ export default function ChatInbox({
   return (
     <div className="flex flex-col h-full min-h-0">
       {/* Header */}
-      <div className="shrink-0 border-b border-[var(--line-color)] px-5 md:px-8 pt-6 pb-0">
-        <div className="font-display font-bold tracking-widest uppercase text-xs text-accent-gradient mb-3">Chat</div>
+      <div className="shrink-0 border-b border-[var(--line-color)] px-4 pt-5 pb-0">
+        <div className="font-display font-bold tracking-widest uppercase text-xs text-accent-gradient mb-2">Chat</div>
         <div className="flex items-center justify-between mb-3">
-          <h1 className="font-display text-2xl font-bold tracking-tight">Conversations</h1>
+          <h1 className="font-display text-lg font-bold tracking-tight">Conversations</h1>
           {canCreate && (
             <button
               onClick={onNew}
@@ -168,7 +170,9 @@ export default function ChatInbox({
               <li key={c.id}>
                 <button
                   onClick={() => onOpen(c.id)}
-                  className="w-full px-5 md:px-8 py-3.5 text-left hover:bg-[var(--surface)] transition-colors cursor-pointer flex items-start gap-3"
+                  className={`w-full px-4 py-3 text-left transition-colors cursor-pointer flex items-start gap-3 ${
+                    activeId === c.id ? 'bg-[var(--surface)] border-l-2 border-[var(--text-main)]' : 'hover:bg-[var(--surface)]'
+                  }`}
                 >
                   {/* Unread dot */}
                   <div className="mt-1.5 shrink-0">
