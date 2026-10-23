@@ -73,7 +73,7 @@ interface OrgValue {
 
 const Ctx = createContext<OrgValue | null>(null);
 
-export const ROLE_LABEL: Record<Role, string> = { admin: 'Admin', founder: 'Founder', manager: 'Manager', member: 'Member' };
+export const ROLE_LABEL: Record<Role, string> = { admin: 'Admin', founder: 'Founder', manager: 'Manager', member: 'Member', client: 'Client' };
 
 // "devdeep120205@gmail.com" → "Devdeep": a stand-in until someone sets their name.
 export const nameFromEmail = (email: string) =>
