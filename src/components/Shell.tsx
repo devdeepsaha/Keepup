@@ -33,6 +33,10 @@ import TeamView from './TeamView';
 import PersonView from './PersonView';
 import AdminView from './AdminView';
 import ClientsView from './ClientsView';
+import ChatInbox from './ChatInbox';
+import ConversationView from './ConversationView';
+import NewConversationModal from './NewConversationModal';
+import ClientPortalShell from './ClientPortalShell';
 import NoticesBell from './NoticesBell';
 import WelcomePrompt from './WelcomePrompt';
 
@@ -78,6 +82,8 @@ const VIEW_LABEL: Record<View, string> = {
   person: 'Team › Person',
   admin: 'Admin',
   clients: 'Clients',
+  chat: 'Chat',
+  conversation: 'Chat',
 };
 
 export default function Shell({ user }: { user: User }) {
@@ -130,6 +136,8 @@ export default function Shell({ user }: { user: User }) {
   }, []);
   const [view, setView] = useState<View>('workspace');
   const [calendarDay, setCalendarDay] = useState<string | undefined>();
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [showNewConvModal, setShowNewConvModal] = useState(false);
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const [focusTask, setFocusTask] = useState<{ id: string; nonce: number } | null>(null); // scroll to a task
   const [openTaskId, setOpenTaskId] = useState<string | null>(null); // one task open at a time
@@ -300,6 +308,9 @@ export default function Shell({ user }: { user: User }) {
   }, [tasks, now]);
   const sidebarWidth = collapsed ? SIDEBAR_ICON_WIDTH : width;
 
+  // Client users get a stripped portal — no task UI, no sidebar.
+  if (org.ready && org.isClient) return <ClientPortalShell />;
+
   return (
     <ClientColorsProvider workspace={workspace}>
     <div style={{ '--sb': `${sidebarWidth}px`, '--sb-icon': `${SIDEBAR_ICON_WIDTH}px` } as CSSProperties}>
@@ -441,6 +452,16 @@ export default function Shell({ user }: { user: User }) {
           <AdminView userId={user.id} />
         ) : view === 'clients' ? (
           <ClientsView />
+        ) : view === 'chat' ? (
+          <ChatInbox
+            onOpen={(id) => { setConversationId(id); setView('conversation'); }}
+            onNew={() => setShowNewConvModal(true)}
+          />
+        ) : view === 'conversation' && conversationId ? (
+          <ConversationView
+            conversationId={conversationId}
+            onBack={() => setView('chat')}
+          />
         ) : (
           <ArchiveView
             archived={archived}
@@ -452,6 +473,13 @@ export default function Shell({ user }: { user: User }) {
           />
         )}
       </div>
+
+      {showNewConvModal && (
+        <NewConversationModal
+          onClose={() => setShowNewConvModal(false)}
+          onCreate={(id) => { setShowNewConvModal(false); setConversationId(id); setView('conversation'); }}
+        />
+      )}
 
       <MobileNav
         view={view}

@@ -19,6 +19,7 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 type Body =
   | { action: 'invite'; email: string; name: string; roles: string[] }
+  | { action: 'invite_client'; email: string; name: string; clientId: string }
   | { action: 'remove'; userId: string }
   | { action: 'restore'; userId: string };
 
@@ -78,6 +79,54 @@ Deno.serve(async (req) => {
     // The new account's member row was made by the sign-up trigger; make sure name and roles match the invite.
     if (data.user) {
       await server.from('members').update({ display_name: name, roles, invited_by: who.user.id }).eq('user_id', data.user.id);
+    }
+    return json({ ok: true, userId: data.user?.id ?? null });
+  }
+
+  if (body.action === 'invite_client') {
+    const email = String(body.email ?? '').trim().toLowerCase();
+    const name = String(body.name ?? '').replace(/\s+/g, ' ').trim().slice(0, 60);
+    const clientId = String(body.clientId ?? '');
+    if (!EMAIL.test(email)) return json({ error: 'That email doesn\'t look right.' }, 400);
+    if (!name) return json({ error: 'Add their name.' }, 400);
+    if (!clientId) return json({ error: 'Select a client.' }, 400);
+    if (!isAdmin && !isFounder) return json({ error: 'Only the admin and founders can invite clients.' }, 403);
+
+    // Verify the client exists
+    const { data: clientRow } = await server.from('clients').select('id').eq('id', clientId).maybeSingle();
+    if (!clientRow) return json({ error: 'Client not found.' }, 404);
+
+    const origin = req.headers.get('Origin') ?? '';
+    const redirectTo = ALLOWED_ORIGINS.includes(origin) ? origin : SITE;
+    const { data, error } = await server.auth.admin.inviteUserByEmail(email, {
+      redirectTo,
+      data: { display_name: name, client_id: clientId },
+    });
+    if (error) {
+      const msg = /already been registered|already exists/i.test(error.message)
+        ? 'They already have a Keepup account.'
+        : /rate limit/i.test(error.message)
+          ? 'Email limit reached. Try again in a bit.'
+          : error.message;
+      return json({ error: msg }, 400);
+    }
+    if (data.user) {
+      // Set member row with client role
+      await server.from('members').upsert({
+        user_id: data.user.id,
+        display_name: name,
+        roles: ['client'],
+        status: 'invited',
+        invited_by: who.user.id,
+        created_at: new Date().toISOString(),
+      });
+      // Link to client immediately (org_hello will confirm on first login too)
+      await server.from('client_members').upsert({
+        client_id: clientId,
+        user_id: data.user.id,
+        added_by: who.user.id,
+        added_at: new Date().toISOString(),
+      });
     }
     return json({ ok: true, userId: data.user?.id ?? null });
   }

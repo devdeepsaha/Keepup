@@ -6,7 +6,7 @@ import type { Client } from '../types';
 // The company (Mint-more): who's in it, their roles, and whose shared Mint-more work you can see.
 // The database enforces all of this (015_org_policies.sql); this only mirrors it for the screens.
 
-export type Role = 'admin' | 'founder' | 'manager' | 'member';
+export type Role = 'admin' | 'founder' | 'manager' | 'member' | 'client';
 export type Level = 'view' | 'plan';
 
 export interface Member {
@@ -63,6 +63,8 @@ interface OrgValue {
   isAdmin: boolean;
   isFounder: boolean;
   isManager: boolean;
+  isClient: boolean;     // user is a client contact (role = 'client' only)
+  myClientIds: string[]; // client IDs this user represents (for client-role users)
   nameOf: (id: string | null | undefined) => string;
   levelFor: (id: string) => Level | null;
   refresh: () => Promise<void>;
@@ -89,6 +91,7 @@ export function OrgProvider({ user, children }: { user: User; children: ReactNod
   const [teamAccess, setTeamAccess] = useState<TeamAccessRow[]>([]);
   const [scopes, setScopes] = useState<ScopeRow[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
+  const [myClientIds, setMyClientIds] = useState<string[]>([]);
   // Who you can see, worked out by the database from every rule (Everyone, teams, exceptions).
   const [mine, setMine] = useState<{ user_id: string; level: Level }[]>([]);
   const [ready, setReady] = useState(false);
@@ -96,7 +99,7 @@ export function OrgProvider({ user, children }: { user: User; children: ReactNod
   const [emailNames, setEmailNames] = useState<Map<string, string>>(new Map());
 
   const refresh = useCallback(async () => {
-    const [m, a, t, tm, ta, sc, my, cl] = await Promise.all([
+    const [m, a, t, tm, ta, sc, my, cl, cm] = await Promise.all([
       supabase.from('members').select('user_id, display_name, roles, status, invited_by, created_at').order('created_at'),
       supabase.from('access').select('viewer_id, subject_id, level, granted_by, created_at'),
       supabase.from('teams').select('id, name').order('name'),
@@ -105,6 +108,7 @@ export function OrgProvider({ user, children }: { user: User; children: ReactNod
       supabase.from('viewer_scope').select('viewer_id, level, granted_by'),
       supabase.rpc('org_my_people'),
       supabase.from('clients').select('id, name, team_id, created_at').order('name'),
+      supabase.from('client_members').select('client_id').eq('user_id', user.id),
     ]);
     if (m.data) setMembers(m.data as Member[]);
     if (a.data) setAccess(a.data as AccessRow[]);
@@ -116,10 +120,11 @@ export function OrgProvider({ user, children }: { user: User; children: ReactNod
     if (sc.data) setScopes(sc.data as ScopeRow[]);
     if (my.data) setMine(my.data as { user_id: string; level: Level }[]);
     if (cl.data) setClients(cl.data as Client[]);
+    if (cm.data) setMyClientIds((cm.data as { client_id: string }[]).map((r) => r.client_id));
     // (Returns nothing for anyone but the admin.)
     const { data: emails } = await supabase.rpc('org_emails');
     if (emails) setEmailNames(new Map((emails as { user_id: string; email: string }[]).map((e) => [e.user_id, nameFromEmail(e.email)])));
-  }, []);
+  }, [user.id]);
 
   // Signing in marks an invite as accepted and saves the name given at sign-up (or in the invite).
   useEffect(() => {
@@ -134,6 +139,7 @@ export function OrgProvider({ user, children }: { user: User; children: ReactNod
       .on('postgres_changes', { event: '*', schema: 'public', table: 'team_access' }, () => refresh())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'viewer_scope' }, () => refresh())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'clients' }, () => refresh())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'client_members' }, () => refresh())
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
@@ -145,6 +151,7 @@ export function OrgProvider({ user, children }: { user: User; children: ReactNod
     const active = me?.status === 'active';
     const has = (r: Role) => active && !!me?.roles.includes(r);
     const isAdmin = has('admin');
+    const isClient = active && !!me && me.roles.length > 0 && me.roles.every((r) => r === 'client');
     const byId = new Map(members.map((m) => [m.user_id, m]));
     let people: Person[];
     if (isAdmin) {
@@ -167,6 +174,8 @@ export function OrgProvider({ user, children }: { user: User; children: ReactNod
       isAdmin,
       isFounder: has('founder'),
       isManager: has('manager'),
+      isClient,
+      myClientIds,
       nameOf: (id) => {
         if (!id) return 'Someone';
         if (id === user.id) return 'You';
@@ -183,7 +192,7 @@ export function OrgProvider({ user, children }: { user: User; children: ReactNod
         return null;
       },
     };
-  }, [members, access, teams, teamAccess, scopes, clients, mine, ready, user.id, refresh, emailNames]);
+  }, [members, access, teams, teamAccess, scopes, clients, myClientIds, mine, ready, user.id, refresh, emailNames]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
@@ -202,6 +211,8 @@ const SOLO: OrgValue = {
   isAdmin: false,
   isFounder: false,
   isManager: false,
+  isClient: false,
+  myClientIds: [],
   nameOf: (id) => (id ? 'A colleague' : 'Someone'),
   levelFor: () => null,
   refresh: async () => {},

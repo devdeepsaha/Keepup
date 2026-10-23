@@ -50,6 +50,75 @@ export interface Client {
   created_at: string;
 }
 
+export interface Project {
+  id: string;
+  client_id: string;
+  name: string;
+  description: string | null;
+  status: 'active' | 'paused' | 'done';
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface Conversation {
+  id: string;
+  client_id: string | null;
+  project_id: string | null;
+  name: string;
+  type: 'internal' | 'client_facing';
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface ConversationMember {
+  conversation_id: string;
+  user_id: string;
+  role: 'admin' | 'member';
+  joined_at: string;
+}
+
+export interface MediaAttachment {
+  url: string;
+  type: string;  // 'image/jpeg', 'video/mp4', etc.
+  name: string;
+  size: number;
+}
+
+export interface Mention {
+  user_id: string;
+  display_name: string;
+}
+
+export interface Message {
+  id: string;
+  conversation_id: string;
+  sender_id: string;
+  text: string;
+  media: MediaAttachment[];
+  mentions: Mention[];
+  reply_to: string | null;
+  created_at: string;
+  edited_at: string | null;
+  deleted_at: string | null;
+}
+
+export interface DigestSettings {
+  id: string;
+  conversation_id: string | null;
+  interval_hours: 1 | 6 | 12 | 24 | 48;
+  enabled: boolean;
+  updated_at: string;
+}
+
+export interface Digest {
+  id: string;
+  conversation_id: string;
+  content: string;
+  message_range: { from: string; to: string; count: number };
+  generated_at: string;
+  next_digest_at: string;
+}
+
 export interface TaskLink {
   label: string; // "Live", "Test", or your own
   url: string;

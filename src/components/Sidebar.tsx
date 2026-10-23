@@ -14,7 +14,7 @@ import type { Task, Workspace } from '../types';
 // Layout modelled on shadcn's sidebar-07: collapses to icons, clickable edge rail, Ctrl/⌘+B,
 // grouped nav with collapsible sub-items, a "projects" list with per-item menus, and a user menu.
 
-export type View = 'workspace' | 'calendar' | 'year' | 'stats' | 'archive' | 'team' | 'person' | 'admin' | 'clients';
+export type View = 'workspace' | 'calendar' | 'year' | 'stats' | 'archive' | 'team' | 'person' | 'admin' | 'clients' | 'chat' | 'conversation';
 export type Section = 'needs-attention' | 'in-progress' | 'waiting' | 'archived' | 'trash';
 
 export const SIDEBAR_WIDTH = 256; // px, expanded (default; drag the edge to resize)
@@ -338,6 +338,13 @@ export default function Sidebar({
           },
         ]
       : []),
+    {
+      id: 'chat' as View,
+      views: ['chat', 'conversation'] as View[],
+      label: 'Chat',
+      icon: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z',
+      sub: [{ label: 'Conversations', go: () => onNavigate('chat') }],
+    },
   ];
   const clientsLabel = current.kind === 'work' ? 'Work' : 'Projects';
 

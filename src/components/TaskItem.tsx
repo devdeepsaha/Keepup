@@ -301,6 +301,11 @@ export default function TaskItem({
                     From <span className="font-semibold text-[var(--text-main)]">{nameOf(task.assigned_by)}</span>
                   </span>
                 )}
+                {task.task_brief?.startsWith('Delegated from chat:') && (
+                  <span className="rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 text-[0.625rem] font-semibold" title={task.task_brief}>
+                    💬 From chat
+                  </span>
+                )}
                 {task.priority === 'urgent' && !done && (
                   <span className="rounded-full bg-red-500 text-white px-2 py-0.5 text-[0.625rem] font-semibold uppercase tracking-wider">Urgent</span>
                 )}

@@ -1,17 +1,18 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useState, type FormEvent, type ChangeEvent } from 'react';
 import { supabase } from '../lib/supabase';
 import { orgAction, ROLE_LABEL, useOrg, type Member, type Role } from '../lib/org';
 import { describeEvent, timeAgo, type TaskEvent } from '../lib/notices';
 import AccessEditor from './AccessEditor';
 import TeamsEditor from './TeamsEditor';
 
-type Tab = 'people' | 'teams' | 'access' | 'history';
+type Tab = 'people' | 'teams' | 'access' | 'history' | 'digests';
 
 const ADMIN_TABS: { id: Tab; label: string }[] = [
   { id: 'people',  label: 'People' },
   { id: 'teams',   label: 'Teams' },
   { id: 'access',  label: 'Access' },
   { id: 'history', label: 'History' },
+  { id: 'digests', label: 'Digests' },
 ];
 const FOUNDER_TABS: { id: Tab; label: string }[] = [
   { id: 'access',  label: 'Access' },
@@ -34,6 +35,8 @@ export default function AdminView({ userId }: { userId: string }) {
   const [events, setEvents] = useState<TaskEvent[]>([]);
   const [invite, setInvite] = useState({ email: '', name: '', role: 'member' as Role });
   const [inviteState, setInviteState] = useState<{ busy: boolean; error: string | null; done: string | null }>({ busy: false, error: null, done: null });
+  const [clientInvite, setClientInvite] = useState({ email: '', name: '', clientId: '' });
+  const [clientInviteState, setClientInviteState] = useState<{ busy: boolean; error: string | null; done: string | null }>({ busy: false, error: null, done: null });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
@@ -67,6 +70,19 @@ export default function AdminView({ userId }: { userId: string }) {
     else {
       setInviteState({ busy: false, error: null, done: `Invite sent to ${invite.email}.` });
       setInvite({ email: '', name: '', role: 'member' });
+      await org.refresh();
+    }
+  };
+
+  const sendClientInvite = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!clientInvite.clientId) return;
+    setClientInviteState({ busy: true, error: null, done: null });
+    const err = await orgAction({ action: 'invite_client', email: clientInvite.email, name: clientInvite.name, clientId: clientInvite.clientId });
+    if (err) setClientInviteState({ busy: false, error: err, done: null });
+    else {
+      setClientInviteState({ busy: false, error: null, done: `Client invite sent to ${clientInvite.email}.` });
+      setClientInvite({ email: '', name: '', clientId: '' });
       await org.refresh();
     }
   };
@@ -183,6 +199,56 @@ export default function AdminView({ userId }: { userId: string }) {
             </section>
 
             <section>
+              <h2 className="font-display text-xl font-bold tracking-tight mb-1">Invite a client</h2>
+              <p className="text-sm text-[var(--text-muted)] mb-4">Give a client their own login. They'll see a restricted portal — projects and chat only, no tasks.</p>
+              <form onSubmit={sendClientInvite} className="flex flex-wrap items-end gap-3">
+                <label className="flex min-w-52 flex-1 flex-col gap-1 font-display text-xs text-[var(--text-muted)]">
+                  Client email
+                  <input
+                    type="email"
+                    required
+                    value={clientInvite.email}
+                    onChange={(e) => setClientInvite({ ...clientInvite, email: e.target.value })}
+                    placeholder="client@company.com"
+                    className="rounded-lg border border-[var(--line-color)] bg-transparent px-3 py-2 text-sm text-[var(--text-main)] outline-none focus:border-[var(--text-main)] clean-input"
+                  />
+                </label>
+                <label className="flex min-w-40 flex-1 flex-col gap-1 font-display text-xs text-[var(--text-muted)]">
+                  Contact name
+                  <input
+                    required
+                    value={clientInvite.name}
+                    onChange={(e) => setClientInvite({ ...clientInvite, name: e.target.value })}
+                    placeholder="Rahul Sharma"
+                    maxLength={60}
+                    className="rounded-lg border border-[var(--line-color)] bg-transparent px-3 py-2 text-sm text-[var(--text-main)] outline-none focus:border-[var(--text-main)] clean-input"
+                  />
+                </label>
+                <label className="flex flex-col gap-1 font-display text-xs text-[var(--text-muted)]">
+                  Client
+                  <select
+                    required
+                    value={clientInvite.clientId}
+                    onChange={(e) => setClientInvite({ ...clientInvite, clientId: e.target.value })}
+                    className="rounded-lg border border-[var(--line-color)] bg-[var(--surface)] px-2 py-2 text-sm text-[var(--text-main)] outline-none cursor-pointer"
+                  >
+                    <option value="">Select…</option>
+                    {org.clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </label>
+                <button
+                  type="submit"
+                  disabled={clientInviteState.busy || !clientInvite.clientId}
+                  className="rounded-lg bg-[var(--text-main)] px-4 py-2 font-display text-sm font-semibold text-[var(--bg-color)] hover:bg-[image:var(--accent-gradient)] hover:text-white disabled:opacity-50 cursor-pointer"
+                >
+                  {clientInviteState.busy ? 'Sending…' : 'Send invite'}
+                </button>
+              </form>
+              {clientInviteState.error && <p className="mt-2 border-l-2 border-red-500 pl-3 text-sm text-red-500">{clientInviteState.error}</p>}
+              {clientInviteState.done && <p className="mt-2 border-l-2 border-emerald-400 pl-3 text-sm">{clientInviteState.done}</p>}
+            </section>
+
+            <section>
               <h2 className="font-display text-xl font-bold tracking-tight mb-1">
                 People
                 <span className="ml-2 font-normal text-base text-[var(--text-muted)]">{org.members.filter((m) => m.status !== 'removed').length}</span>
@@ -272,6 +338,11 @@ export default function AdminView({ userId }: { userId: string }) {
           </div>
         )}
 
+        {/* ── Digests ── */}
+        {tab === 'digests' && (
+          <DigestsTab />
+        )}
+
         {/* ── History ── */}
         {tab === 'history' && (
           <div>
@@ -298,6 +369,122 @@ export default function AdminView({ userId }: { userId: string }) {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+type DigestInterval = 1 | 6 | 12 | 24 | 48;
+interface DigestSettingRow {
+  id: string;
+  conversation_id: string | null;
+  interval_hours: DigestInterval;
+  enabled: boolean;
+  conversation_name?: string;
+}
+
+function DigestsTab() {
+  const [rows, setRows] = useState<DigestSettingRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const { data: settings } = await supabase.from('digest_settings').select('*').order('conversation_id', { nullsFirst: true });
+    if (!settings) { setLoading(false); return; }
+    const convIds = settings.filter((s) => s.conversation_id).map((s) => s.conversation_id as string);
+    const { data: convs } = convIds.length
+      ? await supabase.from('conversations').select('id, name').in('id', convIds)
+      : { data: [] };
+    const convMap = new Map((convs ?? []).map((c) => [c.id, c.name as string]));
+    setRows(settings.map((s) => ({ ...s, conversation_name: s.conversation_id ? convMap.get(s.conversation_id) : undefined })) as DigestSettingRow[]);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const update = async (id: string, patch: Partial<DigestSettingRow>) => {
+    setSaving(id);
+    await supabase.from('digest_settings').update(patch).eq('id', id);
+    await load();
+    setSaving(null);
+  };
+
+  const INTERVAL_OPTIONS: DigestInterval[] = [1, 6, 12, 24, 48];
+
+  if (loading) return <p className="text-sm text-[var(--text-muted)]">Loading…</p>;
+
+  const globalRow = rows.find((r) => !r.conversation_id);
+  const perConvRows = rows.filter((r) => !!r.conversation_id);
+
+  return (
+    <div className="space-y-8">
+      <section>
+        <h2 className="font-display text-xl font-bold tracking-tight mb-1">Global default</h2>
+        <p className="text-sm text-[var(--text-muted)] mb-4">How often founders and managers receive AI digest summaries by default. Per-conversation settings override this.</p>
+        {globalRow ? (
+          <div className="flex items-center gap-4">
+            <label className="flex items-center gap-2 font-display text-sm">
+              <input
+                type="checkbox"
+                checked={globalRow.enabled}
+                onChange={(e: ChangeEvent<HTMLInputElement>) => update(globalRow.id, { enabled: e.target.checked })}
+                className="cursor-pointer"
+              />
+              Enabled
+            </label>
+            <select
+              value={globalRow.interval_hours}
+              onChange={(e: ChangeEvent<HTMLSelectElement>) => update(globalRow.id, { interval_hours: Number(e.target.value) as DigestInterval })}
+              disabled={saving === globalRow.id}
+              className="rounded-lg border border-[var(--line-color)] bg-[var(--surface)] px-3 py-2 text-sm outline-none cursor-pointer"
+            >
+              {INTERVAL_OPTIONS.map((h) => <option key={h} value={h}>{h === 1 ? 'Every hour' : `Every ${h} hours`}</option>)}
+            </select>
+          </div>
+        ) : (
+          <p className="text-sm text-[var(--text-muted)]">No global setting found. Run the migration.</p>
+        )}
+      </section>
+
+      {perConvRows.length > 0 && (
+        <section>
+          <h2 className="font-display text-xl font-bold tracking-tight mb-1">Per-conversation overrides</h2>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-[var(--line-color)] text-left font-display text-xs text-[var(--text-muted)]">
+                <th className="pb-2 font-medium">Conversation</th>
+                <th className="pb-2 font-medium">Interval</th>
+                <th className="pb-2 font-medium">Enabled</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--line-color)]">
+              {perConvRows.map((r) => (
+                <tr key={r.id}>
+                  <td className="py-2.5 pr-4">{r.conversation_name ?? r.conversation_id?.slice(0, 8)}</td>
+                  <td className="py-2.5 pr-4">
+                    <select
+                      value={r.interval_hours}
+                      onChange={(e: ChangeEvent<HTMLSelectElement>) => update(r.id, { interval_hours: Number(e.target.value) as DigestInterval })}
+                      disabled={saving === r.id}
+                      className="rounded-lg border border-[var(--line-color)] bg-[var(--surface)] px-2 py-1 text-sm outline-none cursor-pointer"
+                    >
+                      {INTERVAL_OPTIONS.map((h) => <option key={h} value={h}>{h}h</option>)}
+                    </select>
+                  </td>
+                  <td className="py-2.5">
+                    <input
+                      type="checkbox"
+                      checked={r.enabled}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => update(r.id, { enabled: e.target.checked })}
+                      className="cursor-pointer"
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
     </div>
   );
 }

@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { supabase } from '../lib/supabase';
 import { useOrg } from '../lib/org';
-import type { Task } from '../types';
+import type { Task, Project } from '../types';
 import { SELECT } from '../hooks/useTasks';
 import CreateTaskModal from './CreateTaskModal';
 import BulkAssignModal from './BulkAssignModal';
@@ -25,10 +25,12 @@ function isOverdue(task: Task) {
 }
 
 type Filter = 'all' | 'open' | 'done' | 'urgent' | 'overdue';
+type ClientTab = 'tasks' | 'projects';
 
 export default function ClientsView() {
   const org = useOrg();
   const [clientId, setClientId] = useState<string>('');
+  const [clientTab, setClientTab] = useState<ClientTab>('tasks');
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState<Filter>('all');
@@ -189,6 +191,28 @@ export default function ClientsView() {
         )}
       </div>
 
+      {/* Tab bar */}
+      <div className="flex gap-0 border-b border-[var(--line-color)] -mb-2">
+        {(['tasks', 'projects'] as ClientTab[]).map((t) => (
+          <button
+            key={t}
+            onClick={() => setClientTab(t)}
+            className={`px-4 py-2.5 font-display text-sm font-medium border-b-2 transition-colors cursor-pointer ${
+              clientTab === t
+                ? 'border-[var(--text-main)] text-[var(--text-main)]'
+                : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-main)]'
+            }`}
+          >
+            {t.charAt(0).toUpperCase() + t.slice(1)}
+          </button>
+        ))}
+      </div>
+
+      {clientTab === 'projects' && clientId && <ProjectsPanel clientId={clientId} canEdit={canEdit} />}
+
+      {clientTab === 'tasks' && (
+        <>
+
       {/* Progress */}
       <div className="rounded-xl border border-[var(--line-color)] p-4 space-y-3">
         <div className="flex flex-wrap gap-4 font-display text-sm">
@@ -305,6 +329,9 @@ export default function ClientsView() {
         </div>
       )}
 
+        </>
+      )}
+
       {showCreate && client && (
         <CreateTaskModal
           defaultClientId={client.id}
@@ -318,6 +345,130 @@ export default function ClientsView() {
           onClose={() => setShowBulk(false)}
           onDone={() => { setShowBulk(false); load(); }}
         />
+      )}
+    </div>
+  );
+}
+
+const STATUS_COLOR: Record<string, string> = {
+  active: 'bg-emerald-500/15 text-emerald-600',
+  paused: 'bg-yellow-400/15 text-yellow-600',
+  done: 'bg-[var(--surface)] text-[var(--text-muted)]',
+};
+
+function ProjectsPanel({ clientId, canEdit }: { clientId: string; canEdit: boolean }) {
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [adding, setAdding] = useState(false);
+  const [form, setForm] = useState({ name: '', description: '', status: 'active' as Project['status'] });
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const { data } = await supabase.from('projects').select('*').eq('client_id', clientId).order('created_at', { ascending: false });
+    setProjects((data ?? []) as Project[]);
+    setLoading(false);
+  }, [clientId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const create = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!form.name.trim()) return;
+    setBusy(true);
+    const { data: ud } = await supabase.auth.getUser();
+    await supabase.from('projects').insert({ client_id: clientId, name: form.name.trim(), description: form.description.trim() || null, status: form.status, created_by: ud.user?.id });
+    setForm({ name: '', description: '', status: 'active' });
+    setAdding(false);
+    setBusy(false);
+    await load();
+  };
+
+  const updateStatus = async (id: string, status: Project['status']) => {
+    await supabase.from('projects').update({ status }).eq('id', id);
+    await load();
+  };
+
+  if (loading) return <p className="text-sm text-[var(--text-muted)]">Loading…</p>;
+
+  return (
+    <div className="space-y-4">
+      {canEdit && !adding && (
+        <button
+          onClick={() => setAdding(true)}
+          className="rounded-lg bg-[var(--text-main)] px-4 py-2 font-display text-sm font-semibold text-[var(--bg-color)] hover:bg-[image:var(--accent-gradient)] hover:text-white cursor-pointer"
+        >
+          + New project
+        </button>
+      )}
+
+      {adding && (
+        <form onSubmit={create} className="rounded-xl border border-[var(--line-color)] p-4 space-y-3">
+          <h3 className="font-display font-semibold text-sm">New project</h3>
+          <input
+            required
+            autoFocus
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            maxLength={80}
+            placeholder="Name (e.g. SEO, Development, Reels)"
+            className="w-full rounded-lg border border-[var(--line-color)] bg-transparent px-3 py-2 text-sm outline-none focus:border-[var(--text-main)] clean-input"
+          />
+          <textarea
+            value={form.description}
+            onChange={(e) => setForm({ ...form, description: e.target.value })}
+            maxLength={500}
+            rows={2}
+            placeholder="Short description (optional)"
+            className="w-full rounded-lg border border-[var(--line-color)] bg-transparent px-3 py-2 text-sm outline-none focus:border-[var(--text-main)] resize-none clean-input"
+          />
+          <div className="flex gap-2 items-center">
+            <select
+              value={form.status}
+              onChange={(e) => setForm({ ...form, status: e.target.value as Project['status'] })}
+              className="rounded-lg border border-[var(--line-color)] bg-[var(--surface)] px-2 py-2 text-sm cursor-pointer"
+            >
+              <option value="active">Active</option>
+              <option value="paused">Paused</option>
+              <option value="done">Done</option>
+            </select>
+            <button type="submit" disabled={busy} className="rounded-lg bg-[var(--text-main)] px-4 py-2 font-display text-sm font-semibold text-[var(--bg-color)] disabled:opacity-40 cursor-pointer">
+              {busy ? 'Creating…' : 'Create'}
+            </button>
+            <button type="button" onClick={() => setAdding(false)} className="text-sm text-[var(--text-muted)] hover:text-[var(--text-main)] cursor-pointer">Cancel</button>
+          </div>
+        </form>
+      )}
+
+      {projects.length === 0 ? (
+        <p className="text-sm text-[var(--text-muted)]">No projects yet. {canEdit ? 'Create one above.' : 'Your manager will add them.'}</p>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {projects.map((p) => (
+            <div key={p.id} className="rounded-xl border border-[var(--line-color)] p-4 space-y-2 hover:border-[var(--text-main)] transition-colors">
+              <div className="flex items-start justify-between gap-2">
+                <p className="font-display font-semibold text-sm">{p.name}</p>
+                {canEdit ? (
+                  <select
+                    value={p.status}
+                    onChange={(e) => updateStatus(p.id, e.target.value as Project['status'])}
+                    className={`rounded-full px-2 py-0.5 font-display text-[10px] font-semibold cursor-pointer border-0 outline-none ${STATUS_COLOR[p.status]}`}
+                  >
+                    <option value="active">Active</option>
+                    <option value="paused">Paused</option>
+                    <option value="done">Done</option>
+                  </select>
+                ) : (
+                  <span className={`rounded-full px-2 py-0.5 font-display text-[10px] font-semibold ${STATUS_COLOR[p.status]}`}>
+                    {p.status.charAt(0).toUpperCase() + p.status.slice(1)}
+                  </span>
+                )}
+              </div>
+              {p.description && <p className="text-xs text-[var(--text-muted)] line-clamp-2">{p.description}</p>}
+              <p className="font-display text-[10px] text-[var(--text-muted)]">Created {fmt(p.created_at)}</p>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );
