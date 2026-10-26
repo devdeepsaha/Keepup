@@ -8,6 +8,7 @@ import { groupClients, rhythmScopes } from '../lib/handles';
 import { ROLE_LABEL, useOrg, type Person } from '../lib/org';
 import { timeAgo } from '../lib/notices';
 import AccessEditor from './AccessEditor';
+import ClientsView from './ClientsView';
 
 // Founders and managers: everyone whose Mint-more work you can see, at a glance. Click a person for their list.
 
@@ -65,6 +66,7 @@ export default function TeamView({ userId, onOpenPerson }: { userId: string; onO
   const weekStart = startOfWeek(new Date(now)).getTime();
   const [client, setClient] = useState<string | null>(null);
   const [roleError, setRoleError] = useState<string | null>(null);
+  const [tab, setTab] = useState<'people' | 'clients'>('people');
 
   const clients = useMemo(() => [...groupClients(tasks ?? []).values()].sort((a, b) => a.name.localeCompare(b.name)), [tasks]);
 
@@ -125,6 +127,25 @@ export default function TeamView({ userId, onOpenPerson }: { userId: string; onO
 
   return (
     <div className="px-5 md:px-8 lg:px-10 pt-2 pb-5 max-w-7xl mx-auto">
+      {/* Tab bar */}
+      <div className="flex gap-0 border-b border-[var(--line-color)] mb-6 -mx-5 md:-mx-8 lg:-mx-10 px-5 md:px-8 lg:px-10">
+        {(['people', 'clients'] as const).map((t) => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className={`px-4 py-2.5 font-display text-sm font-medium border-b-2 transition-colors cursor-pointer -mb-px ${
+              tab === t
+                ? 'border-[var(--text-main)] text-[var(--text-main)]'
+                : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-main)]'
+            }`}
+          >
+            {t === 'people' ? 'People' : 'Clients'}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'clients' && <ClientsView />}
+      <div className={tab === 'people' ? '' : 'hidden'}>
       <header className="mb-6">
         <div className="font-display font-bold tracking-widest uppercase text-xs text-accent-gradient mb-2">
           Team · Mint-more
@@ -261,10 +282,11 @@ export default function TeamView({ userId, onOpenPerson }: { userId: string; onO
             viewers={managers}
             subjects={org.people.map((p) => p.member)}
             founderMode
-            emptyText="No managers yet. Use “Make manager” on someone’s card above."
+            emptyText={`No managers yet. Use “Make manager” on someone’s card above.`}
           />
         </section>
       )}
+      </div>
     </div>
   );
 }

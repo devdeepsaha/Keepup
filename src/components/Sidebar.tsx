@@ -748,7 +748,10 @@ export default function Sidebar({
             const active = item.views.includes(view);
             const open = expandedNav[item.id] && !collapsed;
             return (
-              <div key={item.id}>
+              <div
+                key={item.id}
+                onPointerEnter={() => { if (!collapsed && item.sub.length > 0) setExpandedNav((s) => ({ ...s, [item.id]: true })); }}
+              >
                 <button
                   onClick={() => {
                     // A main tab also opens its sub-tabs, so on phones the drawer stays open for them.
