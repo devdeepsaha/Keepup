@@ -427,6 +427,38 @@ export default function TaskItem({
             </div>
           </div>
 
+          {/* Todo preview: open items always visible on the row, toggleable without opening the panel */}
+          {(() => {
+            const allTodos = task.todos ?? [];
+            const openTodos = allTodos.filter((t) => !t.done);
+            const doneCount = allTodos.length - openTodos.length;
+            if (allTodos.length === 0 || done) return null;
+            const preview = openTodos.slice(0, 3);
+            const remaining = openTodos.length - preview.length;
+            return (
+              <div className="pl-9 pb-2.5 pr-1 space-y-1.5" onClick={(e) => e.stopPropagation()}>
+                {preview.map((td) => (
+                  <div key={td.id} className="flex items-start gap-2 group/td">
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); onToggleTodo?.(task.id, td.id, true); }}
+                      className="mt-0.5 h-4 w-4 shrink-0 rounded border border-[var(--line-color)] group-hover/td:border-[var(--text-main)] transition-colors duration-150 cursor-pointer flex items-center justify-center active:scale-95"
+                      aria-label="Mark done"
+                    />
+                    <span className="text-sm leading-relaxed text-[var(--text-main)] truncate">{td.text}</span>
+                  </div>
+                ))}
+                {(remaining > 0 || doneCount > 0) && (
+                  <p className="font-display text-[0.6875rem] text-[var(--text-muted)] pl-6 cursor-pointer hover:text-[var(--text-main)] transition-colors duration-150" onClick={(e) => { e.stopPropagation(); setOpen(true); }}>
+                    {remaining > 0 && `+${remaining} more`}
+                    {remaining > 0 && doneCount > 0 && ' · '}
+                    {doneCount > 0 && `${doneCount} done`}
+                  </p>
+                )}
+              </div>
+            );
+          })()}
+
           {/* Expandable logs section */}
           <div className={`expand-grid ${isOpen ? 'is-open' : ''}`}>
             <div className="expand-inner">
