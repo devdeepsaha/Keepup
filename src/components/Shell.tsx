@@ -114,7 +114,6 @@ export default function Shell({ user }: { user: User }) {
     addUpdate,
     deleteUpdate,
     toggleTodo,
-    addTodos,
     markPlannedSent,
     movePlanned,
     deletePlanned,
