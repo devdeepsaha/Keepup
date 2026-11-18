@@ -5,6 +5,13 @@ export interface TaskUpdate {
   created_at: string;
 }
 
+export interface Todo {
+  id: string;
+  text: string;
+  done: boolean;
+  created_at: string;
+}
+
 export interface Task {
   id: string;
   text: string;
@@ -36,6 +43,7 @@ export interface Task {
   task_brief?: string | null; // longer description / brief
   client_id?: string | null; // FK to public.clients
   task_references?: TaskReference[]; // optional links (spreadsheet, IG, etc.)
+  todos?: Todo[]; // checklist items
 }
 
 export interface TaskReference {

@@ -683,6 +683,21 @@ async function applyActions(
           results.push({ kind: 'renamed', title: text, detail: `was "${task.text}"`, undo: { type: 'rename', taskId: task.id, text: task.text } });
         break;
       }
+      case 'add_todos': {
+        const items: string[] = Array.isArray(a.items) ? a.items.filter((s): s is string => typeof s === 'string' && s.trim().length > 0) : [];
+        if (!items.length) break;
+        // Fetch current todos and append new ones.
+        const { data: row } = await db.from('tasks').select('todos').eq('id', task.id).single();
+        const existing = Array.isArray((row as { todos?: unknown })?.todos) ? (row as { todos: unknown[] }).todos : [];
+        const now = new Date().toISOString();
+        const newItems = items.map((text) => ({ id: crypto.randomUUID(), text: text.trim(), done: false, created_at: now }));
+        const merged = [...existing, ...newItems];
+        const { error } = await db.from('tasks').update({ todos: merged }).eq('id', task.id);
+        if (error) skip(task.text, error.message);
+        else
+          results.push({ kind: 'updated', title: task.text, detail: `Added ${items.length} to-do item${items.length === 1 ? '' : 's'}` });
+        break;
+      }
     }
   }
   return results;

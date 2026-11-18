@@ -38,6 +38,7 @@ interface Props {
   onAskAbout?: (handle: string) => void;
   onAddUpdate: (id: string, text: string) => void;
   onDeleteUpdate: (taskId: string, updateId: string) => void;
+  onToggleTodo?: (taskId: string, todoId: string, done: boolean) => void;
   onMarkPlannedSent: (taskId: string, update: PlannedUpdate) => void;
   onMovePlanned: (taskId: string, update: PlannedUpdate, sendOn: string) => void;
   onDeletePlanned: (taskId: string, update: PlannedUpdate) => void;
@@ -70,6 +71,7 @@ export default function TaskItem({
   onAskAbout,
   onAddUpdate,
   onDeleteUpdate,
+  onToggleTodo,
   onMarkPlannedSent,
   onMovePlanned,
   onDeletePlanned,
@@ -499,7 +501,58 @@ export default function TaskItem({
                   </ol>
                 )}
 
-                {/* 3. Settings: rarely changed, so folded into one quiet line */}
+                {/* 3. Todos checklist */}
+                {(task.todos ?? []).length > 0 && (() => {
+                  const todos = task.todos ?? [];
+                  const open = todos.filter((t) => !t.done);
+                  const done = todos.filter((t) => t.done);
+                  return (
+                    <div className="pl-1 space-y-1.5">
+                      {open.length > 0 && (
+                        <div>
+                          <p className="font-display text-[0.6875rem] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1">To Do</p>
+                          <ul className="space-y-1">
+                            {open.map((td) => (
+                              <li key={td.id} className="flex items-start gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => onToggleTodo?.(task.id, td.id, true)}
+                                  className="mt-0.5 h-4 w-4 shrink-0 rounded border border-[var(--line-color)] hover:border-[var(--text-main)] transition-colors cursor-pointer flex items-center justify-center"
+                                  aria-label="Mark done"
+                                />
+                                <span className="text-sm leading-relaxed">{td.text}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {done.length > 0 && (
+                        <div>
+                          <p className="font-display text-[0.6875rem] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1">Done</p>
+                          <ul className="space-y-1">
+                            {done.map((td) => (
+                              <li key={td.id} className="flex items-start gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => onToggleTodo?.(task.id, td.id, false)}
+                                  className="mt-0.5 h-4 w-4 shrink-0 rounded border border-[var(--line-color)] bg-[var(--text-main)] transition-colors cursor-pointer flex items-center justify-center"
+                                  aria-label="Reopen"
+                                >
+                                  <svg width="8" height="6" viewBox="0 0 8 6" fill="none" className="text-[var(--bg-color)]">
+                                    <path d="M1 3L3 5L7 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                                  </svg>
+                                </button>
+                                <span className="text-sm leading-relaxed line-through text-[var(--text-muted)]">{td.text}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* 4. Settings: rarely changed, so folded into one quiet line */}
                 <div className="pl-1 font-display text-xs text-[var(--text-muted)]">
                   <button
                     type="button"

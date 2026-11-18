@@ -113,6 +113,8 @@ export default function Shell({ user }: { user: User }) {
     purgeTask,
     addUpdate,
     deleteUpdate,
+    toggleTodo,
+    addTodos,
     markPlannedSent,
     movePlanned,
     deletePlanned,
@@ -430,6 +432,7 @@ export default function Shell({ user }: { user: User }) {
             onAskAbout={askAbout}
             onAddUpdate={addUpdate}
             onDeleteUpdate={deleteUpdate}
+            onToggleTodo={toggleTodo}
             onMarkPlannedSent={markPlannedSent}
             onMovePlanned={movePlanned}
             onDeletePlanned={deletePlanned}

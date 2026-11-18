@@ -82,7 +82,7 @@ The user can tag a task with a short handle made from its name, e.g. "@tomboy se
 
 # Writing logs and titles
 - Every log counts as a check-in with the client and resets the task's timer. So log only something that actually happened: work done, a message or update sent, a meeting, a delivery. Never log a bare status ("in progress", "paused", "on hold", "missed the deadline", "no update yet"): status goes in fields (waiting_for, due_date, rhythm) or nowhere. A fake log hides a task that needs attention.
-- A log records what happened, in the user's own specifics: names, numbers, versions, blockers, next step. Past tense, no subject, fragment style, at most 140 characters.
+- A log records what happened, in the user's own specifics: names, numbers, versions, blockers, next step. Past tense, no subject, fragment style, at most 140 characters. **Preserve the user's own words as closely as possible.** Fix typos and grammar, but do not rewrite, expand, or paraphrase their meaning. "added services tabs in homepage" → "Added services tabs in homepage". Do not add context like "as requested" or "for sir" that isn't in the user's message.
   Good: "Sent v2 to Priya; waiting on legal redlines."  Bad: "Made progress on the task."
 - Don't pad. If the user only says "PR done", complete the task with note null.
 - A title starts with a verb, is at most 60 characters, and contains no dates (dates go in due_date). "Book flights for the offsite", not "flights".
@@ -197,6 +197,13 @@ Reply: Three things are open.
 – Vendor contract: quiet 5 days
 – Update investor deck: due Wed
 
+# Task checklists
+The user can maintain a list of to-do items (todos) on a task. These are small checklist items, separate from logged updates. They stay visible and can be ticked off when done.
+- When the user says things like "@creatyv [list of tasks]", pastes a numbered or bulleted list, or says "add these to the list" / "note these down" / "these are the remaining tasks" for an existing task → use add_todos on that task. items = each list item as a string, one per item, **preserving the user's exact wording**. Only condense if something is extremely long (>120 chars); never paraphrase or rewrite otherwise.
+- Do NOT use log_update for a list of to-do items. Use add_todos.
+- Detecting a list: numbered lines (1. 2. 3.), bulleted lines (• - *), or a message that is clearly a set of parallel items rather than a narrative update.
+- add_todos: task_ref; items = string array of the items in the user's exact words (cleaned up only for obvious typos).
+
 # Output
 Return JSON matching the schema: reply, actions (an empty list when nothing should change), and draft (null unless you wrote a client message). For every action, set the fields that apply to its type and null for the rest.
 - add_task: text = title; due_date; cadence_per_week (0 = no rhythm, null = default); done; note; date (when the note or the finished work happened); start_date (when the work was handed over, if the user says); waiting_for (what's awaited, if blocked from the start).
@@ -209,7 +216,8 @@ Return JSON matching the schema: reply, actions (an empty list when nothing shou
 - set_waiting: task_ref; text = what you're waiting for (a few words).
 - clear_waiting: task_ref.
 - plan_updates: task_ref (or text = title for a new task); parts = the updates in order, each { title, text, send_on }.
-- set_link: task_ref; text = the web address; note = its label ("Live", "Test", or what the user calls it).`;
+- set_link: task_ref; text = the web address; note = its label ("Live", "Test", or what the user calls it).
+- add_todos: task_ref; items = string array of checklist items in the user's own words.`;
 
 const nullableString = (description: string) => ({
   anyOf: [{ type: 'string' }, { type: 'null' }],
@@ -228,6 +236,7 @@ export const ACTION_TYPES = [
   'clear_waiting',
   'plan_updates',
   'set_link',
+  'add_todos',
 ] as const;
 
 export type ActionType = (typeof ACTION_TYPES)[number];
@@ -245,6 +254,7 @@ export interface Action {
   waiting_for?: string | null;
   parts?: { title: string; text: string; send_on: string | null }[] | null;
   workspace?: string | null;
+  items?: string[] | null;
 }
 
 export interface AssistantOutput {
@@ -279,7 +289,7 @@ export const RESPONSE_SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['type', 'task_ref', 'text', 'note', 'date', 'due_date', 'done', 'cadence_per_week', 'start_date', 'waiting_for', 'parts', 'workspace'],
+        required: ['type', 'task_ref', 'text', 'note', 'date', 'due_date', 'done', 'cadence_per_week', 'start_date', 'waiting_for', 'parts', 'workspace', 'items'],
         properties: {
           type: { type: 'string', enum: [...ACTION_TYPES] },
           task_ref: nullableString('Ref of an existing task, e.g. "T3". Null for add_task.'),
@@ -316,6 +326,13 @@ export const RESPONSE_SCHEMA = {
           cadence_per_week: {
             anyOf: [{ type: 'integer', enum: [0, 1, 2, 3] }, { type: 'null' }],
             description: 'add_task: check-ins per week, 0 for no rhythm, null for the default. set_cadence: 1–3, or null to remove the rhythm.',
+          },
+          items: {
+            anyOf: [
+              { type: 'array', items: { type: 'string' } },
+              { type: 'null' },
+            ],
+            description: 'add_todos only: checklist items in the user\'s own words. Null for all other action types.',
           },
         },
       },

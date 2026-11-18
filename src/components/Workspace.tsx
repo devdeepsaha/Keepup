@@ -26,6 +26,7 @@ interface Props {
   onAskAbout?: (handle: string) => void;
   onAddUpdate: (id: string, text: string) => void;
   onDeleteUpdate: (taskId: string, updateId: string) => void;
+  onToggleTodo?: (taskId: string, todoId: string, done: boolean) => void;
   onSetLinks?: (id: string, links: TaskLink[]) => void;
   onMarkPlannedSent: (taskId: string, update: PlannedUpdate) => void;
   onMovePlanned: (taskId: string, update: PlannedUpdate, sendOn: string) => void;
@@ -74,20 +75,27 @@ export default function Workspace({
   // so logging an update doesn't make it jump away mid-edit.
   // `ready` is false while the opened task hasn't loaded yet (e.g. just switched space to open it).
   // Putting it on hold (or back) is the exception: it moves to its new section right away.
-  const [pin, setPin] = useState<{ id: string | null; attention: Attention | null; ready: boolean; waiting: boolean }>({
+  const [pin, setPin] = useState<{ id: string | null; attention: Attention | null; ready: boolean; waiting: boolean; lastUpdated: string | null }>({
     id: null,
     attention: null,
     ready: true,
     waiting: false,
+    lastUpdated: null,
   });
   const openTask = openId ? tasks.find((t) => t.id === openId) : undefined;
-  if (pin.id !== openId || (!pin.ready && openTask) || (openTask && !!openTask.waiting_since !== pin.waiting)) {
-    // A different task was opened (or it closed, or it just loaded, or went on hold): pin it where it is now.
+  if (
+    pin.id !== openId ||
+    (!pin.ready && openTask) ||
+    (openTask && !!openTask.waiting_since !== pin.waiting) ||
+    (openTask && openTask.last_updated !== pin.lastUpdated)
+  ) {
+    // A different task was opened, it just loaded, went on hold, or got a new update: re-evaluate its section.
     setPin({
       id: openId,
       attention: openTask ? attentionFor(openTask, now, todayKey, rhythmScopes(tasks).get(openTask.id)) : null,
       ready: !openId || !!openTask,
       waiting: !!openTask?.waiting_since,
+      lastUpdated: openTask?.last_updated ?? null,
     });
   }
   const dueInput = useRef<HTMLInputElement>(null);

@@ -2,10 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DEFAULT_CADENCE } from '../lib/cadence';
 import { dayKey } from '../lib/dates';
 import { supabase } from '../lib/supabase';
-import type { PlannedUpdate, Task, TaskLink, TaskUpdate, Workspace } from '../types';
+import type { PlannedUpdate, Task, TaskLink, TaskUpdate, Todo, Workspace } from '../types';
 
 export const SELECT =
-  'id, user_id, assigned_by, assignment_status, assignment_note, text, done, completed_at, due_date, cadence_per_week, handle, client, waiting_since, waiting_for, workspace, archived_at, deleted_at, links, last_updated, created_at, scheduled_date, deadline, priority, topic, task_brief, client_id, task_references, task_updates (id, task_id, text, created_at), planned_updates (id, task_id, send_on, title, text, position, status, sent_at)';
+  'id, user_id, assigned_by, assignment_status, assignment_note, text, done, completed_at, due_date, cadence_per_week, handle, client, waiting_since, waiting_for, workspace, archived_at, deleted_at, links, last_updated, created_at, scheduled_date, deadline, priority, topic, task_brief, client_id, task_references, todos, task_updates (id, task_id, text, created_at), planned_updates (id, task_id, send_on, title, text, position, status, sent_at)';
 
 export const TRASH_DAYS = 30;
 
@@ -213,6 +213,36 @@ export function useTasks(userId: string, workspace: Workspace, kind: 'work' | 'p
     [commit, setTasks],
   );
 
+  const toggleTodo = useCallback(
+    (taskId: string, todoId: string, done: boolean) => {
+      let updated: Todo[] = [];
+      setTasks((prev) => {
+        const task = prev.find((t) => t.id === taskId);
+        if (!task) return prev;
+        updated = (task.todos ?? []).map((td) => (td.id === todoId ? { ...td, done } : td));
+        return prev.map((t) => (t.id === taskId ? { ...t, todos: updated } : t));
+      });
+      return commit(supabase.from('tasks').update({ todos: updated }).eq('id', taskId));
+    },
+    [setTasks, commit],
+  );
+
+  const addTodos = useCallback(
+    (taskId: string, items: string[]) => {
+      const now = new Date().toISOString();
+      const newTodos: Todo[] = items.map((text) => ({ id: crypto.randomUUID(), text, done: false, created_at: now }));
+      let merged: Todo[] = [];
+      setTasks((prev) => {
+        const task = prev.find((t) => t.id === taskId);
+        if (!task) return prev;
+        merged = [...(task.todos ?? []), ...newTodos];
+        return prev.map((t) => (t.id === taskId ? { ...t, todos: merged } : t));
+      });
+      return commit(supabase.from('tasks').update({ todos: merged }).eq('id', taskId));
+    },
+    [setTasks, commit],
+  );
+
   const addUpdate = useCallback(
     (taskId: string, text: string) => {
       const now = new Date().toISOString();
@@ -313,5 +343,7 @@ export function useTasks(userId: string, workspace: Workspace, kind: 'work' | 'p
     markPlannedSent,
     movePlanned,
     deletePlanned,
+    toggleTodo,
+    addTodos,
   };
 }
